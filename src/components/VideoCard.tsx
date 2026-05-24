@@ -67,7 +67,7 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
   }
 
   async function toggleLike() {
-    if (!user) { toast.error("Sign in to like"); return; }
+    if (!user) return;
     haptic("medium");
     if (liked) {
       setLiked(false); setLikeCount((c) => c - 1);
@@ -81,7 +81,7 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
   }
 
   async function toggleSave() {
-    if (!user) { toast.error("Sign in to save"); return; }
+    if (!user) return;
     haptic("medium");
     if (saved) {
       setSaved(false);
