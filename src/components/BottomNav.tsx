@@ -1,17 +1,16 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { Home, Search, Bookmark, User, Shield } from "lucide-react";
+import { Home, Search, Bookmark, Shield } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { haptic } from "@/lib/telegram";
 
 export function BottomNav() {
   const { pathname } = useLocation();
-  const { isAdmin, user } = useAuth();
+  const { isAdmin } = useAuth();
 
   const tabs = [
     { to: "/", icon: Home, label: "Feed" },
     { to: "/search", icon: Search, label: "Search" },
     { to: "/saved", icon: Bookmark, label: "Saved" },
-    { to: user ? "/account" : "/login", icon: User, label: "Me" },
   ] as const;
 
   return (

@@ -6,12 +6,13 @@ type Ctx = {
   user: User | null;
   session: Session | null;
   isAdmin: boolean;
+  isAnonymous: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
 };
 
 const AuthCtx = createContext<Ctx>({
-  user: null, session: null, isAdmin: false, loading: true, signOut: async () => {},
+  user: null, session: null, isAdmin: false, isAnonymous: false, loading: true, signOut: async () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -28,13 +29,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsAdmin(false);
       }
     });
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      if (data.session?.user) checkAdmin(data.session.user.id);
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!data.session) {
+        // Silent anonymous sign-in so viewers can like/save without a login UI
+        const { data: anon } = await supabase.auth.signInAnonymously();
+        setSession(anon.session ?? null);
+      } else {
+        setSession(data.session);
+        if (data.session.user) checkAdmin(data.session.user.id);
+      }
       setLoading(false);
     });
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  const isAnonymous = !!session?.user?.is_anonymous;
 
   async function checkAdmin(uid: string) {
     const { data } = await supabase.from("user_roles").select("role").eq("user_id", uid).eq("role", "admin").maybeSingle();
@@ -44,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthCtx.Provider value={{
       user: session?.user ?? null,
-      session, isAdmin, loading,
+      session, isAdmin, isAnonymous, loading,
       signOut: async () => { await supabase.auth.signOut(); },
     }}>
       {children}
