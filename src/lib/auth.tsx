@@ -6,12 +6,13 @@ type Ctx = {
   user: User | null;
   session: Session | null;
   isAdmin: boolean;
+  isAnonymous: boolean;
   loading: boolean;
   signOut: () => Promise<void>;
 };
 
 const AuthCtx = createContext<Ctx>({
-  user: null, session: null, isAdmin: false, loading: true, signOut: async () => {},
+  user: null, session: null, isAdmin: false, isAnonymous: false, loading: true, signOut: async () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
