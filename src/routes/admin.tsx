@@ -1,5 +1,5 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,27 +9,47 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Upload, Trash2, Plus, Film, Users } from "lucide-react";
+import { Upload, Trash2, Plus, Film, Users, Shield } from "lucide-react";
 
 export const Route = createFileRoute("/admin")({ component: AdminPage });
 
 function AdminPage() {
-  const { user, isAdmin, loading } = useAuth();
-  const nav = useNavigate();
+  const { user, isAdmin, isAnonymous, loading } = useAuth();
   const [tab, setTab] = useState<"upload" | "videos" | "creators">("upload");
-
-  useEffect(() => {
-    if (!loading && !user) nav({ to: "/login" });
-  }, [loading, user, nav]);
+  const [claiming, setClaiming] = useState(false);
 
   if (loading) return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Loading…</div>;
-  if (!user) return null;
+
+  async function claimAdmin() {
+    if (!user) return;
+    setClaiming(true);
+    const { error } = await supabase.from("user_roles").insert({ user_id: user.id, role: "admin" });
+    setClaiming(false);
+    if (error) toast.error(error.message);
+    else { toast.success("You are now admin"); window.location.reload(); }
+  }
+
   if (!isAdmin) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-        <h1 className="text-xl font-bold">Admins only</h1>
-        <p className="text-sm text-muted-foreground">You need an admin role to access the dashboard.</p>
-        <Link to="/" className="rounded-full gradient-primary px-5 py-2 text-sm font-semibold text-primary-foreground">Back to feed</Link>
+      <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl gradient-primary glow">
+          <Shield className="h-8 w-8 text-primary-foreground" />
+        </div>
+        <h1 className="text-xl font-bold">Admin access</h1>
+        {!user || isAnonymous ? (
+          <>
+            <p className="max-w-xs text-sm text-muted-foreground">Sign in with an email account to claim admin (first account becomes admin).</p>
+            <Link to="/login" className="rounded-full gradient-primary px-6 py-3 text-sm font-semibold text-primary-foreground">Sign in / Create account</Link>
+          </>
+        ) : (
+          <>
+            <p className="max-w-xs text-sm text-muted-foreground">Signed in as <span className="text-foreground">{user.email}</span>. Claim admin (only works if no admin exists yet).</p>
+            <Button disabled={claiming} onClick={claimAdmin} className="rounded-full gradient-primary px-6 py-3 text-sm font-semibold text-primary-foreground">
+              {claiming ? "Claiming…" : "Claim admin role"}
+            </Button>
+          </>
+        )}
+        <Link to="/" className="text-xs text-muted-foreground">← Back to feed</Link>
       </main>
     );
   }
