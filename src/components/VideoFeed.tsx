@@ -50,23 +50,30 @@ export function VideoFeed({ videos, likedSet, savedSet, loading, emptyText }: Pr
 
   return (
     <div ref={containerRef} className="snap-feed no-scrollbar h-full w-full overflow-y-scroll">
-      {videos.map((v, i) => (
-        <div
-          key={v.id}
-          ref={(el) => { itemRefs.current[i] = el; }}
-          data-idx={i}
-          className="snap-item relative h-full w-full"
-        >
-          <VideoCard
-            video={v}
-            active={i === active}
-            muted={muted}
-            onToggleMute={() => setMuted((m) => !m)}
-            initialLiked={likedSet?.has(v.id)}
-            initialSaved={savedSet?.has(v.id)}
-          />
-        </div>
-      ))}
+      {videos.map((v, i) => {
+        const distance = Math.abs(i - active);
+        // Buffer current + next 2 fully; just metadata for the rest
+        const preload: "auto" | "metadata" | "none" =
+          distance === 0 ? "auto" : distance <= 2 ? "auto" : distance <= 4 ? "metadata" : "none";
+        return (
+          <div
+            key={v.id}
+            ref={(el) => { itemRefs.current[i] = el; }}
+            data-idx={i}
+            className="snap-item relative h-full w-full"
+          >
+            <VideoCard
+              video={v}
+              active={i === active}
+              muted={muted}
+              onToggleMute={() => setMuted((m) => !m)}
+              initialLiked={likedSet?.has(v.id)}
+              initialSaved={savedSet?.has(v.id)}
+              preload={preload}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }

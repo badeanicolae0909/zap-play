@@ -89,44 +89,62 @@ function UploadTab() {
     queryKey: ["creators"],
     queryFn: async () => (await supabase.from("creators").select("id, display_name, username").order("display_name")).data ?? [],
   });
+  const [mode, setMode] = useState<"file" | "url">("url");
   const [creatorId, setCreatorId] = useState("");
   const [caption, setCaption] = useState("");
   const [tags, setTags] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [thumb, setThumb] = useState<File | null>(null);
+  const [videoUrl, setVideoUrl] = useState("");
+  const [thumbUrl, setThumbUrl] = useState("");
+  const [featured, setFeatured] = useState(false);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!file || !creatorId) { toast.error("Pick a creator and video file"); return; }
+    if (!creatorId) { toast.error("Pick a creator"); return; }
     setBusy(true); setProgress(10);
     try {
-      const ext = file.name.split(".").pop();
-      const key = `${creatorId}/${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from("videos").upload(key, file, { upsert: false, contentType: file.type });
-      if (upErr) throw upErr;
-      setProgress(60);
-      const { data: pub } = supabase.storage.from("videos").getPublicUrl(key);
-      let thumbUrl: string | null = null;
-      if (thumb) {
-        const tkey = `${creatorId}/${Date.now()}.${thumb.name.split(".").pop()}`;
-        await supabase.storage.from("thumbnails").upload(tkey, thumb, { contentType: thumb.type });
-        thumbUrl = supabase.storage.from("thumbnails").getPublicUrl(tkey).data.publicUrl;
+      let finalVideoUrl = "";
+      let finalThumbUrl: string | null = null;
+
+      if (mode === "file") {
+        if (!file) { toast.error("Pick a video file"); setBusy(false); return; }
+        const ext = file.name.split(".").pop();
+        const key = `${creatorId}/${Date.now()}.${ext}`;
+        const { error: upErr } = await supabase.storage.from("videos").upload(key, file, { upsert: false, contentType: file.type });
+        if (upErr) throw upErr;
+        setProgress(60);
+        finalVideoUrl = supabase.storage.from("videos").getPublicUrl(key).data.publicUrl;
+        if (thumb) {
+          const tkey = `${creatorId}/${Date.now()}.${thumb.name.split(".").pop()}`;
+          await supabase.storage.from("thumbnails").upload(tkey, thumb, { contentType: thumb.type });
+          finalThumbUrl = supabase.storage.from("thumbnails").getPublicUrl(tkey).data.publicUrl;
+        }
+      } else {
+        if (!videoUrl.trim()) { toast.error("Paste a video URL"); setBusy(false); return; }
+        try { new URL(videoUrl.trim()); } catch { toast.error("Invalid URL"); setBusy(false); return; }
+        finalVideoUrl = videoUrl.trim();
+        finalThumbUrl = thumbUrl.trim() || null;
+        setProgress(60);
       }
+
       setProgress(85);
       const { error: insErr } = await supabase.from("videos").insert({
         creator_id: creatorId,
-        video_url: pub.publicUrl,
-        thumbnail_url: thumbUrl,
+        video_url: finalVideoUrl,
+        thumbnail_url: finalThumbUrl,
         caption: caption || null,
+        is_featured: featured,
         tags: tags ? tags.split(",").map((t) => t.trim().replace(/^#/, "")).filter(Boolean) : [],
       });
       if (insErr) throw insErr;
       setProgress(100);
-      toast.success("Video uploaded");
-      setFile(null); setThumb(null); setCaption(""); setTags("");
+      toast.success("Video published");
+      setFile(null); setThumb(null); setVideoUrl(""); setThumbUrl(""); setCaption(""); setTags(""); setFeatured(false);
       qc.invalidateQueries({ queryKey: ["feed"] });
+      qc.invalidateQueries({ queryKey: ["admin-videos"] });
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -137,6 +155,11 @@ function UploadTab() {
 
   return (
     <form onSubmit={submit} className="space-y-4">
+      <div className="grid grid-cols-2 gap-2 rounded-2xl glass p-1">
+        <button type="button" onClick={() => setMode("url")} className={`rounded-xl px-3 py-2.5 text-sm font-medium transition ${mode === "url" ? "gradient-primary text-primary-foreground" : "text-muted-foreground"}`}>From URL</button>
+        <button type="button" onClick={() => setMode("file")} className={`rounded-xl px-3 py-2.5 text-sm font-medium transition ${mode === "file" ? "gradient-primary text-primary-foreground" : "text-muted-foreground"}`}>Upload file</button>
+      </div>
+
       <div className="space-y-1.5">
         <Label>Creator</Label>
         <Select value={creatorId} onValueChange={setCreatorId}>
@@ -146,8 +169,36 @@ function UploadTab() {
           </SelectContent>
         </Select>
       </div>
-      <FileDrop label="Video file (MP4)" accept="video/*" onFile={setFile} file={file} />
-      <FileDrop label="Thumbnail (optional)" accept="image/*" onFile={setThumb} file={thumb} />
+
+      {mode === "file" ? (
+        <>
+          <FileDrop label="Video file (MP4)" accept="video/*" onFile={setFile} file={file} />
+          <FileDrop label="Thumbnail (optional)" accept="image/*" onFile={setThumb} file={thumb} />
+        </>
+      ) : (
+        <>
+          <div className="space-y-1.5">
+            <Label>Video URL</Label>
+            <Input
+              value={videoUrl}
+              onChange={(e) => setVideoUrl(e.target.value)}
+              placeholder="https://… .mp4 / .webm / .m3u8"
+              className="h-12 rounded-xl glass"
+            />
+            <p className="text-[11px] text-muted-foreground">Direct MP4/WebM/HLS links work best. YouTube/TikTok page URLs can't be embedded.</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Thumbnail URL (optional)</Label>
+            <Input
+              value={thumbUrl}
+              onChange={(e) => setThumbUrl(e.target.value)}
+              placeholder="https://… .jpg / .png"
+              className="h-12 rounded-xl glass"
+            />
+          </div>
+        </>
+      )}
+
       <div className="space-y-1.5">
         <Label>Caption</Label>
         <Textarea value={caption} onChange={(e) => setCaption(e.target.value)} rows={3} className="glass rounded-xl" placeholder="Write a caption…" />
@@ -156,13 +207,17 @@ function UploadTab() {
         <Label>Tags (comma separated)</Label>
         <Input value={tags} onChange={(e) => setTags(e.target.value)} className="h-12 rounded-xl glass" placeholder="cinematic, travel" />
       </div>
+      <label className="flex items-center gap-2 text-sm text-muted-foreground">
+        <input type="checkbox" checked={featured} onChange={(e) => setFeatured(e.target.checked)} className="h-4 w-4 rounded" />
+        Feature this video (boosted in the feed)
+      </label>
       {progress > 0 && (
         <div className="h-1.5 overflow-hidden rounded-full bg-muted">
           <div className="h-full gradient-primary transition-all" style={{ width: `${progress}%` }} />
         </div>
       )}
       <Button type="submit" disabled={busy} className="h-12 w-full rounded-xl gradient-primary text-base font-semibold text-primary-foreground">
-        {busy ? "Uploading…" : "Publish video"}
+        {busy ? "Publishing…" : "Publish video"}
       </Button>
     </form>
   );

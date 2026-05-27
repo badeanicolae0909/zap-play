@@ -30,9 +30,10 @@ type Props = {
   onToggleMute: () => void;
   initialLiked?: boolean;
   initialSaved?: boolean;
+  preload?: "auto" | "metadata" | "none";
 };
 
-export function VideoCard({ video, active, muted, onToggleMute, initialLiked, initialSaved }: Props) {
+export function VideoCard({ video, active, muted, onToggleMute, initialLiked, initialSaved, preload = "metadata" }: Props) {
   const ref = useRef<HTMLVideoElement>(null);
   const [paused, setPaused] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -234,7 +235,7 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
         loop
         muted={muted}
         playsInline
-        preload="metadata"
+        preload={preload}
         className="absolute inset-0 h-full w-full object-cover touch-none"
         onPointerDown={onVideoPointerDown}
         onPointerUp={onVideoPointerUp}
