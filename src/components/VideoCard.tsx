@@ -235,7 +235,7 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
         loop
         muted={muted}
         playsInline
-        preload="metadata"
+        preload={preload}
         className="absolute inset-0 h-full w-full object-cover touch-none"
         onPointerDown={onVideoPointerDown}
         onPointerUp={onVideoPointerUp}
