@@ -31,12 +31,12 @@ export function BottomNav() {
             </Link>
           );
         })}
-        {isAdmin && (
-          <Link to="/admin" onClick={() => haptic("light")} className="tap-scale flex flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-1.5">
-            <Shield className={`h-5 w-5 ${pathname.startsWith("/admin") ? "text-primary" : "text-muted-foreground"}`} />
-            <span className="text-[10px] font-medium text-muted-foreground">Admin</span>
-          </Link>
-        )}
+        <Link to="/admin" onClick={() => haptic("light")} className="tap-scale flex flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-1.5">
+          <Shield className={`h-5 w-5 ${pathname.startsWith("/admin") ? "text-primary" : "text-muted-foreground"}`} strokeWidth={isAdmin ? 2.5 : 2} />
+          <span className={`text-[10px] font-medium ${pathname.startsWith("/admin") ? "text-foreground" : "text-muted-foreground"}`}>
+            {isAdmin ? "Admin" : "Claim"}
+          </span>
+        </Link>
       </div>
     </nav>
   );
