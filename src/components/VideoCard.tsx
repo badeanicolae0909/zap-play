@@ -43,6 +43,7 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
   const [likeCount, setLikeCount] = useState(video.like_count);
   const [scrubbing, setScrubbing] = useState(false);
   const [seekIndicator, setSeekIndicator] = useState<{ dir: 1 | -1; speed: number } | null>(null);
+  const [controlsVisible, setControlsVisible] = useState(true);
   const { user } = useAuth();
   const viewedRef = useRef(false);
 
@@ -53,7 +54,20 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
   const seekStartTime = useRef(0);
   const seekDir = useRef<1 | -1>(1);
   const lastTapRef = useRef(0);
-  const tapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pointerStart = useRef<{ x: number; y: number; t: number } | null>(null);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showControls() {
+    setControlsVisible(true);
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setControlsVisible(false), 2000);
+  }
+
+  useEffect(() => {
+    if (active) showControls();
+    return () => { if (hideTimer.current) clearTimeout(hideTimer.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
 
   useEffect(() => {
     const v = ref.current;
@@ -156,39 +170,49 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const dir: 1 | -1 = x < rect.width / 2 ? -1 : 1;
+    pointerStart.current = { x: e.clientX, y: e.clientY, t: Date.now() };
+    // Longer hold threshold so quick swipes never trigger seek
     holdTimer.current = setTimeout(() => {
       holdTimer.current = null;
       startSeek(dir);
-    }, 280);
+    }, 450);
+  }
+
+  function onVideoPointerMove(e: React.PointerEvent<HTMLVideoElement>) {
+    const start = pointerStart.current;
+    if (!start || isSeekingRef.current) return;
+    const dx = Math.abs(e.clientX - start.x);
+    const dy = Math.abs(e.clientY - start.y);
+    // Any meaningful movement = user is scrolling/swiping. Abort hold so the
+    // native scroll takes over without delay.
+    if (dx > 8 || dy > 8) {
+      if (holdTimer.current) { clearTimeout(holdTimer.current); holdTimer.current = null; }
+      pointerStart.current = null;
+    }
   }
 
   function onVideoPointerUp() {
-    if (holdTimer.current) {
-      // Treated as a tap
-      clearTimeout(holdTimer.current);
-      holdTimer.current = null;
-      const now = Date.now();
-      if (now - lastTapRef.current < 300) {
-        // double tap
-        if (tapTimeoutRef.current) clearTimeout(tapTimeoutRef.current);
-        tapTimeoutRef.current = null;
-        lastTapRef.current = 0;
-        handleDoubleTap();
-      } else {
-        lastTapRef.current = now;
-        tapTimeoutRef.current = setTimeout(() => {
-          tapTimeoutRef.current = null;
-          togglePlay();
-        }, 260);
-      }
-    } else if (isSeekingRef.current) {
-      stopSeek();
+    const wasHold = !!holdTimer.current;
+    if (holdTimer.current) { clearTimeout(holdTimer.current); holdTimer.current = null; }
+    if (isSeekingRef.current) { stopSeek(); pointerStart.current = null; return; }
+    if (!wasHold) { pointerStart.current = null; return; }
+
+    // Tap: show controls. Double-tap toggles play/pause.
+    const now = Date.now();
+    if (now - lastTapRef.current < 320) {
+      lastTapRef.current = 0;
+      togglePlay();
+    } else {
+      lastTapRef.current = now;
+      showControls();
     }
+    pointerStart.current = null;
   }
 
   function onVideoPointerCancel() {
     if (holdTimer.current) { clearTimeout(holdTimer.current); holdTimer.current = null; }
     if (isSeekingRef.current) stopSeek();
+    pointerStart.current = null;
   }
 
   // ---- Draggable progress bar ----
@@ -236,8 +260,10 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
         muted={muted}
         playsInline
         preload={preload}
-        className="absolute inset-0 h-full w-full object-cover touch-none"
+        className="absolute inset-0 h-full w-full object-cover"
+        style={{ touchAction: "pan-y" }}
         onPointerDown={onVideoPointerDown}
+        onPointerMove={onVideoPointerMove}
         onPointerUp={onVideoPointerUp}
         onPointerCancel={onVideoPointerCancel}
         onPointerLeave={onVideoPointerCancel}
@@ -298,13 +324,14 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
       {/* Mute toggle */}
       <button
         onClick={(e) => { e.stopPropagation(); onToggleMute(); haptic("light"); }}
-        className="tap-scale absolute right-3 top-3 z-20 glass rounded-full p-2.5"
+        className={`tap-scale absolute right-3 top-3 z-20 glass rounded-full p-2.5 transition-opacity duration-300 ${controlsVisible || paused ? "opacity-100" : "opacity-0 pointer-events-none"}`}
       >
         {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
       </button>
 
       {/* Right action rail */}
-      <div className="absolute bottom-40 right-3 z-20 flex flex-col items-center gap-5">
+      <div className={`absolute bottom-40 right-3 z-20 flex flex-col items-center gap-5 transition-opacity duration-300 ${controlsVisible || paused ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+
         {video.creator && (
           <Link to="/creator/$username" params={{ username: video.creator.username }} className="tap-scale relative">
             <div className="h-12 w-12 overflow-hidden rounded-full border-2 border-foreground gradient-primary">
@@ -321,7 +348,8 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
       </div>
 
       {/* Bottom info */}
-      <div className="absolute inset-x-0 bottom-28 z-10 px-4">
+      <div className={`absolute inset-x-0 bottom-28 z-10 px-4 transition-opacity duration-300 ${controlsVisible || paused ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+
         {video.creator && (
           <Link to="/creator/$username" params={{ username: video.creator.username }} className="inline-flex items-center gap-2">
             <span className="text-base font-bold tracking-tight">@{video.creator.username}</span>
@@ -350,7 +378,7 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
         onPointerMove={onScrubMove}
         onPointerUp={onScrubUp}
         onPointerCancel={onScrubUp}
-        className="absolute inset-x-0 bottom-[92px] z-30 flex h-6 touch-none items-center px-3"
+        className={`absolute inset-x-0 bottom-[92px] z-30 flex h-6 touch-none items-center px-3 transition-opacity duration-300 ${controlsVisible || paused || scrubbing ? "opacity-100" : "opacity-0"}`}
       >
         <div className={`relative w-full overflow-visible rounded-full bg-foreground/15 transition-all ${scrubbing ? "h-1.5" : "h-0.5"}`}>
           <div
