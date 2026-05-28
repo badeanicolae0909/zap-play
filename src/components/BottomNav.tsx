@@ -1,11 +1,30 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { Home, Search, Bookmark, Shield } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { haptic } from "@/lib/telegram";
 
 export function BottomNav() {
   const { pathname } = useLocation();
   const { isAdmin } = useAuth();
+  const isFeed = pathname === "/";
+  const [visible, setVisible] = useState(true);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!isFeed) { setVisible(true); return; }
+    const show = () => {
+      setVisible(true);
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+      hideTimer.current = setTimeout(() => setVisible(false), 2000);
+    };
+    show();
+    window.addEventListener("pointerdown", show, { passive: true });
+    return () => {
+      window.removeEventListener("pointerdown", show);
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+    };
+  }, [isFeed]);
 
   const tabs = [
     { to: "/", icon: Home, label: "Feed" },
@@ -14,8 +33,10 @@ export function BottomNav() {
   ] as const;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 pb-[env(safe-area-inset-bottom)]">
-      <div className="glass-strong mx-3 mb-3 flex items-center justify-around rounded-2xl border border-border px-2 py-2">
+    <nav
+      className={`fixed bottom-0 left-0 right-0 z-40 pb-[env(safe-area-inset-bottom)] transition-opacity duration-300 ${visible ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+    >
+      <div className="glass-strong mx-4 mb-2 flex items-center justify-around rounded-full border border-border px-1.5 py-1">
         {tabs.map(({ to, icon: Icon, label }) => {
           const active = pathname === to;
           return (
@@ -23,19 +44,21 @@ export function BottomNav() {
               key={to}
               to={to}
               onClick={() => haptic("light")}
-              className="tap-scale flex flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-1.5"
+              className="tap-scale relative flex flex-1 items-center justify-center rounded-full px-2 py-1.5"
+              aria-label={label}
             >
-              <Icon className={`h-5 w-5 transition-colors ${active ? "text-foreground" : "text-muted-foreground"}`} strokeWidth={active ? 2.5 : 2} />
-              <span className={`text-[10px] font-medium ${active ? "text-foreground" : "text-muted-foreground"}`}>{label}</span>
-              {active && <div className="absolute -top-0.5 h-0.5 w-6 rounded-full bg-primary glow" />}
+              <Icon className={`h-4 w-4 transition-colors ${active ? "text-foreground" : "text-muted-foreground"}`} strokeWidth={active ? 2.5 : 2} />
+              {active && <div className="absolute -top-0.5 h-0.5 w-5 rounded-full bg-primary glow" />}
             </Link>
           );
         })}
-        <Link to="/admin" onClick={() => haptic("light")} className="tap-scale flex flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-1.5">
-          <Shield className={`h-5 w-5 ${pathname.startsWith("/admin") ? "text-primary" : "text-muted-foreground"}`} strokeWidth={isAdmin ? 2.5 : 2} />
-          <span className={`text-[10px] font-medium ${pathname.startsWith("/admin") ? "text-foreground" : "text-muted-foreground"}`}>
-            {isAdmin ? "Admin" : "Claim"}
-          </span>
+        <Link
+          to="/admin"
+          onClick={() => haptic("light")}
+          className="tap-scale relative flex flex-1 items-center justify-center rounded-full px-2 py-1.5"
+          aria-label={isAdmin ? "Admin" : "Claim admin"}
+        >
+          <Shield className={`h-4 w-4 ${pathname.startsWith("/admin") ? "text-primary" : "text-muted-foreground"}`} strokeWidth={isAdmin ? 2.5 : 2} />
         </Link>
       </div>
     </nav>
