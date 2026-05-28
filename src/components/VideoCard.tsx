@@ -348,7 +348,8 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
       </div>
 
       {/* Bottom info */}
-      <div className="absolute inset-x-0 bottom-28 z-10 px-4">
+      <div className={`absolute inset-x-0 bottom-28 z-10 px-4 transition-opacity duration-300 ${controlsVisible || paused ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+
         {video.creator && (
           <Link to="/creator/$username" params={{ username: video.creator.username }} className="inline-flex items-center gap-2">
             <span className="text-base font-bold tracking-tight">@{video.creator.username}</span>
