@@ -43,6 +43,7 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
   const [likeCount, setLikeCount] = useState(video.like_count);
   const [scrubbing, setScrubbing] = useState(false);
   const [seekIndicator, setSeekIndicator] = useState<{ dir: 1 | -1; speed: number } | null>(null);
+  const [controlsVisible, setControlsVisible] = useState(true);
   const { user } = useAuth();
   const viewedRef = useRef(false);
 
@@ -53,7 +54,20 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
   const seekStartTime = useRef(0);
   const seekDir = useRef<1 | -1>(1);
   const lastTapRef = useRef(0);
-  const tapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pointerStart = useRef<{ x: number; y: number; t: number } | null>(null);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showControls() {
+    setControlsVisible(true);
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setControlsVisible(false), 2000);
+  }
+
+  useEffect(() => {
+    if (active) showControls();
+    return () => { if (hideTimer.current) clearTimeout(hideTimer.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
 
   useEffect(() => {
     const v = ref.current;
