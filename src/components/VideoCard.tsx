@@ -170,39 +170,49 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const dir: 1 | -1 = x < rect.width / 2 ? -1 : 1;
+    pointerStart.current = { x: e.clientX, y: e.clientY, t: Date.now() };
+    // Longer hold threshold so quick swipes never trigger seek
     holdTimer.current = setTimeout(() => {
       holdTimer.current = null;
       startSeek(dir);
-    }, 280);
+    }, 450);
+  }
+
+  function onVideoPointerMove(e: React.PointerEvent<HTMLVideoElement>) {
+    const start = pointerStart.current;
+    if (!start || isSeekingRef.current) return;
+    const dx = Math.abs(e.clientX - start.x);
+    const dy = Math.abs(e.clientY - start.y);
+    // Any meaningful movement = user is scrolling/swiping. Abort hold so the
+    // native scroll takes over without delay.
+    if (dx > 8 || dy > 8) {
+      if (holdTimer.current) { clearTimeout(holdTimer.current); holdTimer.current = null; }
+      pointerStart.current = null;
+    }
   }
 
   function onVideoPointerUp() {
-    if (holdTimer.current) {
-      // Treated as a tap
-      clearTimeout(holdTimer.current);
-      holdTimer.current = null;
-      const now = Date.now();
-      if (now - lastTapRef.current < 300) {
-        // double tap
-        if (tapTimeoutRef.current) clearTimeout(tapTimeoutRef.current);
-        tapTimeoutRef.current = null;
-        lastTapRef.current = 0;
-        handleDoubleTap();
-      } else {
-        lastTapRef.current = now;
-        tapTimeoutRef.current = setTimeout(() => {
-          tapTimeoutRef.current = null;
-          togglePlay();
-        }, 260);
-      }
-    } else if (isSeekingRef.current) {
-      stopSeek();
+    const wasHold = !!holdTimer.current;
+    if (holdTimer.current) { clearTimeout(holdTimer.current); holdTimer.current = null; }
+    if (isSeekingRef.current) { stopSeek(); pointerStart.current = null; return; }
+    if (!wasHold) { pointerStart.current = null; return; }
+
+    // Tap: show controls. Double-tap toggles play/pause.
+    const now = Date.now();
+    if (now - lastTapRef.current < 320) {
+      lastTapRef.current = 0;
+      togglePlay();
+    } else {
+      lastTapRef.current = now;
+      showControls();
     }
+    pointerStart.current = null;
   }
 
   function onVideoPointerCancel() {
     if (holdTimer.current) { clearTimeout(holdTimer.current); holdTimer.current = null; }
     if (isSeekingRef.current) stopSeek();
+    pointerStart.current = null;
   }
 
   // ---- Draggable progress bar ----
