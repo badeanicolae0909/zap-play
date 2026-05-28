@@ -260,8 +260,10 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
         muted={muted}
         playsInline
         preload={preload}
-        className="absolute inset-0 h-full w-full object-cover touch-none"
+        className="absolute inset-0 h-full w-full object-cover"
+        style={{ touchAction: "pan-y" }}
         onPointerDown={onVideoPointerDown}
+        onPointerMove={onVideoPointerMove}
         onPointerUp={onVideoPointerUp}
         onPointerCancel={onVideoPointerCancel}
         onPointerLeave={onVideoPointerCancel}
