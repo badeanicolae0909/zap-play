@@ -330,7 +330,8 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
       </button>
 
       {/* Right action rail */}
-      <div className="absolute bottom-40 right-3 z-20 flex flex-col items-center gap-5">
+      <div className={`absolute bottom-40 right-3 z-20 flex flex-col items-center gap-5 transition-opacity duration-300 ${controlsVisible || paused ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+
         {video.creator && (
           <Link to="/creator/$username" params={{ username: video.creator.username }} className="tap-scale relative">
             <div className="h-12 w-12 overflow-hidden rounded-full border-2 border-foreground gradient-primary">
