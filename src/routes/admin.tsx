@@ -36,18 +36,16 @@ function AdminPage() {
           <Shield className="h-8 w-8 text-primary-foreground" />
         </div>
         <h1 className="text-xl font-bold">Admin access</h1>
-        {!user || isAnonymous ? (
-          <>
-            <p className="max-w-xs text-sm text-muted-foreground">Sign in with an email account to claim admin (first account becomes admin).</p>
-            <Link to="/login" className="rounded-full gradient-primary px-6 py-3 text-sm font-semibold text-primary-foreground">Sign in / Create account</Link>
-          </>
-        ) : (
-          <>
-            <p className="max-w-xs text-sm text-muted-foreground">Signed in as <span className="text-foreground">{user.email}</span>. Claim admin (only works if no admin exists yet).</p>
-            <Button disabled={claiming} onClick={claimAdmin} className="rounded-full gradient-primary px-6 py-3 text-sm font-semibold text-primary-foreground">
-              {claiming ? "Claiming…" : "Claim admin role"}
-            </Button>
-          </>
+        <p className="max-w-xs text-sm text-muted-foreground">
+          Claim the admin role for this app. Only works if no admin exists yet.
+        </p>
+        <Button disabled={claiming || !user} onClick={claimAdmin} className="rounded-full gradient-primary px-6 py-3 text-sm font-semibold text-primary-foreground">
+          {claiming ? "Claiming…" : "Claim admin role"}
+        </Button>
+        {isAnonymous && (
+          <p className="max-w-xs text-[11px] text-muted-foreground">
+            Tip: you can also sign in with email first via <Link to="/login" className="underline">/login</Link> to keep your admin role across devices.
+          </p>
         )}
         <Link to="/" className="text-xs text-muted-foreground">← Back to feed</Link>
       </main>
