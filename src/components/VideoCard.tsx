@@ -378,7 +378,7 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
         onPointerMove={onScrubMove}
         onPointerUp={onScrubUp}
         onPointerCancel={onScrubUp}
-        className="absolute inset-x-0 bottom-[92px] z-30 flex h-6 touch-none items-center px-3"
+        className={`absolute inset-x-0 bottom-[92px] z-30 flex h-6 touch-none items-center px-3 transition-opacity duration-300 ${controlsVisible || paused || scrubbing ? "opacity-100" : "opacity-0"}`}
       >
         <div className={`relative w-full overflow-visible rounded-full bg-foreground/15 transition-all ${scrubbing ? "h-1.5" : "h-0.5"}`}>
           <div
