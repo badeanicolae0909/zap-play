@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Heart, Bookmark, Share2, Play, Volume2, VolumeX, Music2, FastForward, Rewind } from "lucide-react";
 import { Link } from "@tanstack/react-router";
@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { haptic, hapticSuccess } from "@/lib/telegram";
 import { toast } from "sonner";
+import { resolveVideoSource } from "@/lib/video-source";
 
 export type FeedVideo = {
   id: string;
