@@ -50,7 +50,7 @@ export function resolveVideoSource(rawUrl: string): VideoSource {
   // Turbo.cr — /v/{id} -> /embed/{id}
   if (host === "turbo.cr" || host.endsWith(".turbo.cr")) {
     const m = path.match(/^\/(?:v|embed)\/([^/]+)/);
-    if (m) return { kind: "iframe", src: `https://turbo.cr/embed/${m[1]}` };
+    if (m) return { kind: "iframe", src: `https://turbo.cr/embed/${m[1]}?autoplay=1&muted=1` };
   }
 
   // Streamtape / mixdrop / doodstream / dood.* — common /v/ID -> /e/ID embed pattern
