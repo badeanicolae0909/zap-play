@@ -73,16 +73,16 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
   }, [active]);
 
   useEffect(() => {
+    if (active && !viewedRef.current) {
+      viewedRef.current = true;
+      supabase.from("video_views").insert({ video_id: video.id, user_id: user?.id ?? null });
+    }
     const v = ref.current;
     if (!v) return;
     if (active) {
       v.currentTime = 0;
       v.play().catch(() => {});
       setPaused(false);
-      if (!viewedRef.current) {
-        viewedRef.current = true;
-        supabase.from("video_views").insert({ video_id: video.id, user_id: user?.id ?? null });
-      }
     } else {
       v.pause();
     }
