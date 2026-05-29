@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Heart, Bookmark, Share2, Play, Volume2, VolumeX, Music2, FastForward, Rewind } from "lucide-react";
 import { Link } from "@tanstack/react-router";
@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { haptic, hapticSuccess } from "@/lib/telegram";
 import { toast } from "sonner";
+import { resolveVideoSource } from "@/lib/video-source";
 
 export type FeedVideo = {
   id: string;
@@ -34,6 +35,8 @@ type Props = {
 };
 
 export function VideoCard({ video, active, muted, onToggleMute, initialLiked, initialSaved, preload = "metadata" }: Props) {
+  const source = useMemo(() => resolveVideoSource(video.video_url), [video.video_url]);
+  const isEmbed = source.kind === "iframe";
   const ref = useRef<HTMLVideoElement>(null);
   const [paused, setPaused] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -70,16 +73,16 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
   }, [active]);
 
   useEffect(() => {
+    if (active && !viewedRef.current) {
+      viewedRef.current = true;
+      supabase.from("video_views").insert({ video_id: video.id, user_id: user?.id ?? null });
+    }
     const v = ref.current;
     if (!v) return;
     if (active) {
       v.currentTime = 0;
       v.play().catch(() => {});
       setPaused(false);
-      if (!viewedRef.current) {
-        viewedRef.current = true;
-        supabase.from("video_views").insert({ video_id: video.id, user_id: user?.id ?? null });
-      }
     } else {
       v.pause();
     }
@@ -252,27 +255,46 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-black">
-      <video
-        ref={ref}
-        src={video.video_url}
-        poster={video.thumbnail_url ?? undefined}
-        loop
-        muted={muted}
-        playsInline
-        preload={preload}
-        className="absolute inset-0 h-full w-full object-cover"
-        style={{ touchAction: "pan-y" }}
-        onPointerDown={onVideoPointerDown}
-        onPointerMove={onVideoPointerMove}
-        onPointerUp={onVideoPointerUp}
-        onPointerCancel={onVideoPointerCancel}
-        onPointerLeave={onVideoPointerCancel}
-        onTimeUpdate={(e) => {
-          if (scrubbing || isSeekingRef.current) return;
-          const t = e.currentTarget;
-          if (t.duration) setProgress((t.currentTime / t.duration) * 100);
-        }}
-      />
+      {isEmbed ? (
+        <>
+          {video.thumbnail_url && (
+            <img src={video.thumbnail_url} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" />
+          )}
+          {active ? (
+            <iframe
+              key={source.src}
+              src={source.src}
+              title={video.caption ?? "video"}
+              allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+              allowFullScreen
+              referrerPolicy="no-referrer"
+              className="absolute inset-0 h-full w-full border-0"
+            />
+          ) : null}
+        </>
+      ) : (
+        <video
+          ref={ref}
+          src={source.src}
+          poster={video.thumbnail_url ?? undefined}
+          loop
+          muted={muted}
+          playsInline
+          preload={preload}
+          className="absolute inset-0 h-full w-full object-cover"
+          style={{ touchAction: "pan-y" }}
+          onPointerDown={onVideoPointerDown}
+          onPointerMove={onVideoPointerMove}
+          onPointerUp={onVideoPointerUp}
+          onPointerCancel={onVideoPointerCancel}
+          onPointerLeave={onVideoPointerCancel}
+          onTimeUpdate={(e) => {
+            if (scrubbing || isSeekingRef.current) return;
+            const t = e.currentTarget;
+            if (t.duration) setProgress((t.currentTime / t.duration) * 100);
+          }}
+        />
+      )}
 
       {/* Gradients */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-32 gradient-overlay-top" />
@@ -321,13 +343,15 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
         )}
       </AnimatePresence>
 
-      {/* Mute toggle */}
-      <button
-        onClick={(e) => { e.stopPropagation(); onToggleMute(); haptic("light"); }}
-        className={`tap-scale absolute right-3 top-3 z-20 glass rounded-full p-2.5 transition-opacity duration-300 ${controlsVisible || paused ? "opacity-100" : "opacity-0 pointer-events-none"}`}
-      >
-        {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-      </button>
+      {/* Mute toggle — only meaningful for native <video> */}
+      {!isEmbed && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleMute(); haptic("light"); }}
+          className={`tap-scale absolute right-3 top-3 z-20 glass rounded-full p-2.5 transition-opacity duration-300 ${controlsVisible || paused ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        >
+          {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+        </button>
+      )}
 
       {/* Right action rail */}
       <div className={`absolute bottom-40 right-3 z-20 flex flex-col items-center gap-5 transition-opacity duration-300 ${controlsVisible || paused ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
@@ -372,25 +396,28 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
       </div>
 
       {/* Draggable progress / scrub bar — sits above the bottom nav */}
-      <div
-        ref={progressRef}
-        onPointerDown={onScrubDown}
-        onPointerMove={onScrubMove}
-        onPointerUp={onScrubUp}
-        onPointerCancel={onScrubUp}
-        className={`absolute inset-x-0 bottom-[92px] z-30 flex h-6 touch-none items-center px-3 transition-opacity duration-300 ${controlsVisible || paused || scrubbing ? "opacity-100" : "opacity-0"}`}
-      >
-        <div className={`relative w-full overflow-visible rounded-full bg-foreground/15 transition-all ${scrubbing ? "h-1.5" : "h-0.5"}`}>
-          <div
-            className="h-full rounded-full bg-foreground/90 transition-[width] duration-100"
-            style={{ width: `${progress}%` }}
-          />
-          <div
-            className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground shadow-lg transition-all ${scrubbing ? "h-4 w-4 opacity-100" : "h-2.5 w-2.5 opacity-0"}`}
-            style={{ left: `${progress}%` }}
-          />
+      {/* Draggable progress / scrub bar — only for native <video> (iframes don't expose time) */}
+      {!isEmbed && (
+        <div
+          ref={progressRef}
+          onPointerDown={onScrubDown}
+          onPointerMove={onScrubMove}
+          onPointerUp={onScrubUp}
+          onPointerCancel={onScrubUp}
+          className={`absolute inset-x-0 bottom-[92px] z-30 flex h-6 touch-none items-center px-3 transition-opacity duration-300 ${controlsVisible || paused || scrubbing ? "opacity-100" : "opacity-0"}`}
+        >
+          <div className={`relative w-full overflow-visible rounded-full bg-foreground/15 transition-all ${scrubbing ? "h-1.5" : "h-0.5"}`}>
+            <div
+              className="h-full rounded-full bg-foreground/90 transition-[width] duration-100"
+              style={{ width: `${progress}%` }}
+            />
+            <div
+              className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground shadow-lg transition-all ${scrubbing ? "h-4 w-4 opacity-100" : "h-2.5 w-2.5 opacity-0"}`}
+              style={{ left: `${progress}%` }}
+            />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
