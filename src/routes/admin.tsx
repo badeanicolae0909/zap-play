@@ -183,7 +183,7 @@ function UploadTab() {
               placeholder="https://… .mp4 / .webm / .m3u8"
               className="h-12 rounded-xl glass"
             />
-            <p className="text-[11px] text-muted-foreground">Direct MP4/WebM/HLS links work best. YouTube/TikTok page URLs can't be embedded.</p>
+            <p className="text-[11px] text-muted-foreground">Direct MP4/WebM/HLS links play inline. Page URLs from YouTube, Vimeo, Streamable, Turbo.cr, Streamtape, etc. are auto-embedded as players.</p>
           </div>
           <div className="space-y-1.5">
             <Label>Thumbnail URL (optional)</Label>
