@@ -343,13 +343,15 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
         )}
       </AnimatePresence>
 
-      {/* Mute toggle */}
-      <button
-        onClick={(e) => { e.stopPropagation(); onToggleMute(); haptic("light"); }}
-        className={`tap-scale absolute right-3 top-3 z-20 glass rounded-full p-2.5 transition-opacity duration-300 ${controlsVisible || paused ? "opacity-100" : "opacity-0 pointer-events-none"}`}
-      >
-        {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-      </button>
+      {/* Mute toggle — only meaningful for native <video> */}
+      {!isEmbed && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleMute(); haptic("light"); }}
+          className={`tap-scale absolute right-3 top-3 z-20 glass rounded-full p-2.5 transition-opacity duration-300 ${controlsVisible || paused ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        >
+          {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+        </button>
+      )}
 
       {/* Right action rail */}
       <div className={`absolute bottom-40 right-3 z-20 flex flex-col items-center gap-5 transition-opacity duration-300 ${controlsVisible || paused ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
