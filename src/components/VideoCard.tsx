@@ -35,6 +35,8 @@ type Props = {
 };
 
 export function VideoCard({ video, active, muted, onToggleMute, initialLiked, initialSaved, preload = "metadata" }: Props) {
+  const source = useMemo(() => resolveVideoSource(video.video_url), [video.video_url]);
+  const isEmbed = source.kind === "iframe";
   const ref = useRef<HTMLVideoElement>(null);
   const [paused, setPaused] = useState(false);
   const [progress, setProgress] = useState(0);
