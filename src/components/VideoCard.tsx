@@ -255,27 +255,46 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-black">
-      <video
-        ref={ref}
-        src={video.video_url}
-        poster={video.thumbnail_url ?? undefined}
-        loop
-        muted={muted}
-        playsInline
-        preload={preload}
-        className="absolute inset-0 h-full w-full object-cover"
-        style={{ touchAction: "pan-y" }}
-        onPointerDown={onVideoPointerDown}
-        onPointerMove={onVideoPointerMove}
-        onPointerUp={onVideoPointerUp}
-        onPointerCancel={onVideoPointerCancel}
-        onPointerLeave={onVideoPointerCancel}
-        onTimeUpdate={(e) => {
-          if (scrubbing || isSeekingRef.current) return;
-          const t = e.currentTarget;
-          if (t.duration) setProgress((t.currentTime / t.duration) * 100);
-        }}
-      />
+      {isEmbed ? (
+        <>
+          {video.thumbnail_url && (
+            <img src={video.thumbnail_url} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" />
+          )}
+          {active ? (
+            <iframe
+              key={source.src}
+              src={source.src}
+              title={video.caption ?? "video"}
+              allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+              allowFullScreen
+              referrerPolicy="no-referrer"
+              className="absolute inset-0 h-full w-full border-0"
+            />
+          ) : null}
+        </>
+      ) : (
+        <video
+          ref={ref}
+          src={source.src}
+          poster={video.thumbnail_url ?? undefined}
+          loop
+          muted={muted}
+          playsInline
+          preload={preload}
+          className="absolute inset-0 h-full w-full object-cover"
+          style={{ touchAction: "pan-y" }}
+          onPointerDown={onVideoPointerDown}
+          onPointerMove={onVideoPointerMove}
+          onPointerUp={onVideoPointerUp}
+          onPointerCancel={onVideoPointerCancel}
+          onPointerLeave={onVideoPointerCancel}
+          onTimeUpdate={(e) => {
+            if (scrubbing || isSeekingRef.current) return;
+            const t = e.currentTarget;
+            if (t.duration) setProgress((t.currentTime / t.duration) * 100);
+          }}
+        />
+      )}
 
       {/* Gradients */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-32 gradient-overlay-top" />
