@@ -396,25 +396,28 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
       </div>
 
       {/* Draggable progress / scrub bar — sits above the bottom nav */}
-      <div
-        ref={progressRef}
-        onPointerDown={onScrubDown}
-        onPointerMove={onScrubMove}
-        onPointerUp={onScrubUp}
-        onPointerCancel={onScrubUp}
-        className={`absolute inset-x-0 bottom-[92px] z-30 flex h-6 touch-none items-center px-3 transition-opacity duration-300 ${controlsVisible || paused || scrubbing ? "opacity-100" : "opacity-0"}`}
-      >
-        <div className={`relative w-full overflow-visible rounded-full bg-foreground/15 transition-all ${scrubbing ? "h-1.5" : "h-0.5"}`}>
-          <div
-            className="h-full rounded-full bg-foreground/90 transition-[width] duration-100"
-            style={{ width: `${progress}%` }}
-          />
-          <div
-            className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground shadow-lg transition-all ${scrubbing ? "h-4 w-4 opacity-100" : "h-2.5 w-2.5 opacity-0"}`}
-            style={{ left: `${progress}%` }}
-          />
+      {/* Draggable progress / scrub bar — only for native <video> (iframes don't expose time) */}
+      {!isEmbed && (
+        <div
+          ref={progressRef}
+          onPointerDown={onScrubDown}
+          onPointerMove={onScrubMove}
+          onPointerUp={onScrubUp}
+          onPointerCancel={onScrubUp}
+          className={`absolute inset-x-0 bottom-[92px] z-30 flex h-6 touch-none items-center px-3 transition-opacity duration-300 ${controlsVisible || paused || scrubbing ? "opacity-100" : "opacity-0"}`}
+        >
+          <div className={`relative w-full overflow-visible rounded-full bg-foreground/15 transition-all ${scrubbing ? "h-1.5" : "h-0.5"}`}>
+            <div
+              className="h-full rounded-full bg-foreground/90 transition-[width] duration-100"
+              style={{ width: `${progress}%` }}
+            />
+            <div
+              className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground shadow-lg transition-all ${scrubbing ? "h-4 w-4 opacity-100" : "h-2.5 w-2.5 opacity-0"}`}
+              style={{ left: `${progress}%` }}
+            />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
