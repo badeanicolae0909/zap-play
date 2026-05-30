@@ -9,6 +9,9 @@ import { toast } from "sonner";
 import { resolveVideoSource } from "@/lib/video-source";
 import { resolveBunkr } from "@/lib/bunkr.functions";
 
+// Module-level cache of resolved bunkr signed URLs keyed by page URL.
+const bunkrCache = new Map<string, { src: string; type: string; thumbnail: string | null; expiresAt: number }>();
+
 export type FeedVideo = {
   id: string;
   video_url: string;
