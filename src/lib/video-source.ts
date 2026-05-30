@@ -54,6 +54,11 @@ export function resolveVideoSource(rawUrl: string): VideoSource {
     if (m) return { kind: "iframe", src: `https://turbo.cr/embed/${m[1]}?autoplay=1&muted=1` };
   }
 
+  // Bunkr file pages — store the page URL, resolve to signed mp4 at playback time
+  if (/(^|\.)bunkr\.(cr|si|ru|ph|la|is|to|ws|ac|black|red|media|site)$/i.test(host)) {
+    if (/^\/f\//.test(path)) return { kind: "bunkr", src: url };
+  }
+
   // Streamtape / mixdrop / doodstream / dood.* — common /v/ID -> /e/ID embed pattern
   if (
     host.includes("streamtape") ||
