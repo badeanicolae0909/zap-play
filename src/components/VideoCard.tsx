@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Heart, Bookmark, Share2, Play, Volume2, VolumeX, Music2, FastForward, Rewind } from "lucide-react";
+import { Heart, Bookmark, Share2, Play, Volume2, VolumeX, Music2, FastForward, Rewind, Loader2 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { haptic, hapticSuccess } from "@/lib/telegram";
 import { toast } from "sonner";
 import { resolveVideoSource } from "@/lib/video-source";
+import { resolveBunkr } from "@/lib/bunkr.functions";
+
+// Module-level cache of resolved bunkr signed URLs keyed by page URL.
+const bunkrCache = new Map<string, { src: string; type: string; thumbnail: string | null; expiresAt: number }>();
 
 export type FeedVideo = {
   id: string;
@@ -37,6 +41,27 @@ type Props = {
 export function VideoCard({ video, active, muted, onToggleMute, initialLiked, initialSaved, preload = "metadata" }: Props) {
   const source = useMemo(() => resolveVideoSource(video.video_url), [video.video_url]);
   const isEmbed = source.kind === "iframe";
+  const needsResolve = source.kind === "bunkr";
+  const [resolvedSrc, setResolvedSrc] = useState<string | null>(needsResolve ? null : source.src);
+
+  // Resolve bunkr page URLs to signed mp4 (cached briefly until expiry).
+  useEffect(() => {
+    if (!needsResolve) { setResolvedSrc(source.src); return; }
+    if (preload === "none") return;
+    let alive = true;
+    const cached = bunkrCache.get(source.src);
+    if (cached && cached.expiresAt * 1000 > Date.now() + 30_000) {
+      setResolvedSrc(cached.src);
+      return;
+    }
+    resolveBunkr({ data: { pageUrl: source.src } })
+      .then((res) => {
+        bunkrCache.set(source.src, res);
+        if (alive) setResolvedSrc(res.src);
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [source, needsResolve, preload]);
   const ref = useRef<HTMLVideoElement>(null);
   const [paused, setPaused] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -273,27 +298,41 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
           ) : null}
         </>
       ) : (
-        <video
-          ref={ref}
-          src={source.src}
-          poster={video.thumbnail_url ?? undefined}
-          loop
-          muted={muted}
-          playsInline
-          preload={preload}
-          className="absolute inset-0 h-full w-full object-cover"
-          style={{ touchAction: "pan-y" }}
-          onPointerDown={onVideoPointerDown}
-          onPointerMove={onVideoPointerMove}
-          onPointerUp={onVideoPointerUp}
-          onPointerCancel={onVideoPointerCancel}
-          onPointerLeave={onVideoPointerCancel}
-          onTimeUpdate={(e) => {
-            if (scrubbing || isSeekingRef.current) return;
-            const t = e.currentTarget;
-            if (t.duration) setProgress((t.currentTime / t.duration) * 100);
-          }}
-        />
+        <>
+          {resolvedSrc ? (
+            <video
+              ref={ref}
+              src={resolvedSrc}
+              poster={video.thumbnail_url ?? undefined}
+              loop
+              muted={muted}
+              playsInline
+              preload={preload}
+
+              className="absolute inset-0 h-full w-full object-cover"
+              style={{ touchAction: "pan-y" }}
+              onPointerDown={onVideoPointerDown}
+              onPointerMove={onVideoPointerMove}
+              onPointerUp={onVideoPointerUp}
+              onPointerCancel={onVideoPointerCancel}
+              onPointerLeave={onVideoPointerCancel}
+              onTimeUpdate={(e) => {
+                if (scrubbing || isSeekingRef.current) return;
+                const t = e.currentTarget;
+                if (t.duration) setProgress((t.currentTime / t.duration) * 100);
+              }}
+            />
+          ) : (
+            <>
+              {video.thumbnail_url && (
+                <img src={video.thumbnail_url} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" />
+              )}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Loader2 className="h-7 w-7 animate-spin text-foreground/70" />
+              </div>
+            </>
+          )}
+        </>
       )}
 
       {/* Gradients */}

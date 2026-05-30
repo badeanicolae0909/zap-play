@@ -1,0 +1,80 @@
+import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { scrapeBunkrAlbum, resolveBunkrPlayback, type BunkrItem } from "./bunkr.server";
+
+const BUNKR_HOST = /(^|\.)bunkr\.(cr|si|ru|ph|la|is|to|ws|ac|black|red|media|site)$/i;
+
+function assertBunkrUrl(raw: string): URL {
+  let u: URL;
+  try { u = new URL(raw); } catch { throw new Error("Invalid URL"); }
+  if (!BUNKR_HOST.test(u.hostname)) throw new Error("Not a bunkr URL");
+  return u;
+}
+
+async function assertAdmin(userId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("role", "admin")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Forbidden: admin only");
+}
+
+// Admin: scrape an album, return preview items.
+export const scrapeBunkr = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ albumUrl: z.string().url().max(500) }).parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const u = assertBunkrUrl(data.albumUrl);
+    if (!/^\/a\//.test(u.pathname)) throw new Error("URL must be a /a/<id> album");
+    const items = await scrapeBunkrAlbum(u.toString());
+    return { items: items.filter((i) => i.type === "video") };
+  });
+
+// Admin: bulk-insert selected items as videos for a creator.
+export const importBunkr = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({
+      creatorId: z.string().uuid(),
+      items: z.array(
+        z.object({
+          pageUrl: z.string().url(),
+          title: z.string().max(500),
+          thumbnail: z.string().url().nullable(),
+        })
+      ).min(1).max(200),
+    }).parse(d)
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const rows = data.items.map((it) => ({
+      creator_id: data.creatorId,
+      video_url: it.pageUrl,
+      thumbnail_url: it.thumbnail,
+      caption: it.title.replace(/\.[a-z0-9]{2,5}$/i, "").slice(0, 200),
+      tags: [] as string[],
+    }));
+    const { error, count } = await supabaseAdmin
+      .from("videos")
+      .insert(rows, { count: "exact" });
+    if (error) throw new Error(error.message);
+    return { inserted: count ?? rows.length };
+  });
+
+// Public: resolve a bunkr file page URL into a playable signed mp4 URL.
+// Called at playback time because signed URLs expire.
+export const resolveBunkr = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ pageUrl: z.string().url().max(500) }).parse(d))
+  .handler(async ({ data }) => {
+    const u = assertBunkrUrl(data.pageUrl);
+    if (!/^\/f\//.test(u.pathname)) throw new Error("URL must be a /f/<slug> file page");
+    return resolveBunkrPlayback(u.toString());
+  });
+
+export type { BunkrItem };

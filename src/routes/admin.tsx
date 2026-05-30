@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Upload, Trash2, Plus, Film, Users, Shield } from "lucide-react";
+import { Upload, Trash2, Plus, Film, Users, Shield, Download, Loader2 } from "lucide-react";
+import { scrapeBunkr, importBunkr } from "@/lib/bunkr.functions";
 
 export const Route = createFileRoute("/admin")({ component: AdminPage });
 
@@ -217,7 +218,117 @@ function UploadTab() {
       <Button type="submit" disabled={busy} className="h-12 w-full rounded-xl gradient-primary text-base font-semibold text-primary-foreground">
         {busy ? "Publishing…" : "Publish video"}
       </Button>
+
+      <BunkrImport creators={creators ?? []} />
     </form>
+  );
+}
+
+function BunkrImport({ creators }: { creators: Array<{ id: string; display_name: string; username: string }> }) {
+  const qc = useQueryClient();
+  const [albumUrl, setAlbumUrl] = useState("");
+  const [creatorId, setCreatorId] = useState("");
+  const [items, setItems] = useState<Array<{ pageUrl: string; title: string; thumbnail: string | null }>>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [scraping, setScraping] = useState(false);
+  const [importing, setImporting] = useState(false);
+
+  async function doScrape() {
+    if (!albumUrl.trim()) return;
+    setScraping(true); setItems([]); setSelected(new Set());
+    try {
+      const res = await scrapeBunkr({ data: { albumUrl: albumUrl.trim() } });
+      setItems(res.items);
+      setSelected(new Set(res.items.map((i) => i.pageUrl)));
+      if (!res.items.length) toast.message("No videos found in album");
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setScraping(false); }
+  }
+
+  async function doImport() {
+    if (!creatorId) { toast.error("Pick a creator"); return; }
+    const picked = items.filter((i) => selected.has(i.pageUrl));
+    if (!picked.length) { toast.error("Select at least one video"); return; }
+    setImporting(true);
+    try {
+      const res = await importBunkr({ data: { creatorId, items: picked } });
+      toast.success(`Imported ${res.inserted} video${res.inserted === 1 ? "" : "s"}`);
+      setItems([]); setSelected(new Set()); setAlbumUrl("");
+      qc.invalidateQueries({ queryKey: ["feed"] });
+      qc.invalidateQueries({ queryKey: ["admin-videos"] });
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setImporting(false); }
+  }
+
+  function toggle(url: string) {
+    setSelected((s) => { const n = new Set(s); n.has(url) ? n.delete(url) : n.add(url); return n; });
+  }
+
+  return (
+    <div className="mt-2 space-y-3 rounded-2xl glass p-4">
+      <h3 className="flex items-center gap-1.5 text-sm font-semibold"><Download className="h-4 w-4" /> Import from Bunkr album</h3>
+      <p className="text-[11px] text-muted-foreground">
+        Paste a bunkr.cr / bunkr.si album URL (e.g. <code>https://bunkr.cr/a/cYHmvZyn</code>). Videos play with our custom player and autoplay like TikTok.
+      </p>
+      <div className="flex gap-2">
+        <Input
+          value={albumUrl}
+          onChange={(e) => setAlbumUrl(e.target.value)}
+          placeholder="https://bunkr.cr/a/…"
+          className="h-11 flex-1 rounded-xl glass"
+        />
+        <Button type="button" onClick={doScrape} disabled={scraping || !albumUrl.trim()} className="h-11 rounded-xl">
+          {scraping ? <Loader2 className="h-4 w-4 animate-spin" /> : "Scan"}
+        </Button>
+      </div>
+
+      {items.length > 0 && (
+        <>
+          <div className="space-y-1.5">
+            <Label>Creator to attribute videos</Label>
+            <Select value={creatorId} onValueChange={setCreatorId}>
+              <SelectTrigger className="h-11 rounded-xl glass"><SelectValue placeholder="Choose creator" /></SelectTrigger>
+              <SelectContent>
+                {creators.map((c) => <SelectItem key={c.id} value={c.id}>{c.display_name} (@{c.username})</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>{selected.size} of {items.length} selected</span>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setSelected(new Set(items.map((i) => i.pageUrl)))} className="underline">All</button>
+              <button type="button" onClick={() => setSelected(new Set())} className="underline">None</button>
+            </div>
+          </div>
+
+          <div className="grid max-h-72 grid-cols-3 gap-2 overflow-y-auto">
+            {items.map((it) => {
+              const on = selected.has(it.pageUrl);
+              return (
+                <button
+                  key={it.pageUrl}
+                  type="button"
+                  onClick={() => toggle(it.pageUrl)}
+                  className={`relative aspect-[9/16] overflow-hidden rounded-lg border-2 transition ${on ? "border-primary" : "border-transparent opacity-60"}`}
+                >
+                  {it.thumbnail ? (
+                    <img src={it.thumbnail} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-card text-[10px] text-muted-foreground">No preview</div>
+                  )}
+                  <div className="absolute inset-x-0 bottom-0 truncate bg-black/60 px-1 py-0.5 text-[9px]">{it.title}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          <Button type="button" onClick={doImport} disabled={importing || !creatorId || !selected.size} className="h-11 w-full rounded-xl gradient-primary text-primary-foreground">
+            {importing ? "Importing…" : `Import ${selected.size} video${selected.size === 1 ? "" : "s"}`}
+          </Button>
+        </>
+      )}
+    </div>
   );
 }
 
