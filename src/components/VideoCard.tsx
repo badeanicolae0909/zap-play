@@ -38,6 +38,27 @@ type Props = {
 export function VideoCard({ video, active, muted, onToggleMute, initialLiked, initialSaved, preload = "metadata" }: Props) {
   const source = useMemo(() => resolveVideoSource(video.video_url), [video.video_url]);
   const isEmbed = source.kind === "iframe";
+  const needsResolve = source.kind === "bunkr";
+  const [resolvedSrc, setResolvedSrc] = useState<string | null>(needsResolve ? null : source.src);
+
+  // Resolve bunkr page URLs to signed mp4 (cached briefly until expiry).
+  useEffect(() => {
+    if (!needsResolve) { setResolvedSrc(source.src); return; }
+    if (preload === "none") return;
+    let alive = true;
+    const cached = bunkrCache.get(source.src);
+    if (cached && cached.expiresAt * 1000 > Date.now() + 30_000) {
+      setResolvedSrc(cached.src);
+      return;
+    }
+    resolveBunkr({ data: { pageUrl: source.src } })
+      .then((res) => {
+        bunkrCache.set(source.src, res);
+        if (alive) setResolvedSrc(res.src);
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [source, needsResolve, preload]);
   const ref = useRef<HTMLVideoElement>(null);
   const [paused, setPaused] = useState(false);
   const [progress, setProgress] = useState(0);
