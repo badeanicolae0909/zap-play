@@ -298,27 +298,41 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
           ) : null}
         </>
       ) : (
-        <video
-          ref={ref}
-          src={source.src}
-          poster={video.thumbnail_url ?? undefined}
-          loop
-          muted={muted}
-          playsInline
-          preload={preload}
-          className="absolute inset-0 h-full w-full object-cover"
-          style={{ touchAction: "pan-y" }}
-          onPointerDown={onVideoPointerDown}
-          onPointerMove={onVideoPointerMove}
-          onPointerUp={onVideoPointerUp}
-          onPointerCancel={onVideoPointerCancel}
-          onPointerLeave={onVideoPointerCancel}
-          onTimeUpdate={(e) => {
-            if (scrubbing || isSeekingRef.current) return;
-            const t = e.currentTarget;
-            if (t.duration) setProgress((t.currentTime / t.duration) * 100);
-          }}
-        />
+        <>
+          {resolvedSrc ? (
+            <video
+              ref={ref}
+              src={resolvedSrc}
+              poster={video.thumbnail_url ?? undefined}
+              loop
+              muted={muted}
+              playsInline
+              preload={preload}
+              crossOrigin="anonymous"
+              className="absolute inset-0 h-full w-full object-cover"
+              style={{ touchAction: "pan-y" }}
+              onPointerDown={onVideoPointerDown}
+              onPointerMove={onVideoPointerMove}
+              onPointerUp={onVideoPointerUp}
+              onPointerCancel={onVideoPointerCancel}
+              onPointerLeave={onVideoPointerCancel}
+              onTimeUpdate={(e) => {
+                if (scrubbing || isSeekingRef.current) return;
+                const t = e.currentTarget;
+                if (t.duration) setProgress((t.currentTime / t.duration) * 100);
+              }}
+            />
+          ) : (
+            <>
+              {video.thumbnail_url && (
+                <img src={video.thumbnail_url} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" />
+              )}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Loader2 className="h-7 w-7 animate-spin text-foreground/70" />
+              </div>
+            </>
+          )}
+        </>
       )}
 
       {/* Gradients */}
