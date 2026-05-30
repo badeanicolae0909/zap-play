@@ -5,7 +5,8 @@
 
 export type VideoSource =
   | { kind: "video"; src: string }
-  | { kind: "iframe"; src: string };
+  | { kind: "iframe"; src: string }
+  | { kind: "bunkr"; src: string }; // page URL — needs server-side resolve to signed mp4
 
 const DIRECT_MEDIA = /\.(mp4|webm|m3u8|mov|m4v|ogv)(\?|#|$)/i;
 
