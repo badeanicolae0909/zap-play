@@ -349,13 +349,27 @@ function VideosTab() {
   const qc = useQueryClient();
   const { data } = useQuery({
     queryKey: ["admin-videos"],
-    queryFn: async () => (await supabase.from("videos").select("id, caption, view_count, like_count, video_url, thumbnail_url, creator:creators(display_name)").order("created_at", { ascending: false })).data ?? [],
+    queryFn: async () => (await supabase.from("videos").select("id, caption, view_count, like_count, video_url, thumbnail_url, creator_id, creator:creators(display_name)").order("created_at", { ascending: false })).data ?? [],
+  });
+  const { data: creators } = useQuery({
+    queryKey: ["creators"],
+    queryFn: async () => (await supabase.from("creators").select("id, display_name, username").order("display_name")).data ?? [],
   });
   async function del(id: string) {
     if (!confirm("Delete this video?")) return;
     const { error } = await supabase.from("videos").delete().eq("id", id);
     if (error) toast.error(error.message);
     else { toast.success("Deleted"); qc.invalidateQueries({ queryKey: ["admin-videos"] }); qc.invalidateQueries({ queryKey: ["feed"] }); }
+  }
+  async function reassign(id: string, creator_id: string) {
+    const { error } = await supabase.from("videos").update({ creator_id }).eq("id", id);
+    if (error) toast.error(error.message);
+    else {
+      toast.success("Creator updated");
+      qc.invalidateQueries({ queryKey: ["admin-videos"] });
+      qc.invalidateQueries({ queryKey: ["feed"] });
+      qc.invalidateQueries({ queryKey: ["admin-creators"] });
+    }
   }
   return (
     <div className="space-y-2">
@@ -364,9 +378,15 @@ function VideosTab() {
           <div className="h-16 w-12 overflow-hidden rounded-lg bg-card">
             {v.thumbnail_url ? <img src={v.thumbnail_url} className="h-full w-full object-cover" alt="" /> : <video src={v.video_url} className="h-full w-full object-cover" muted />}
           </div>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 space-y-1.5">
             <p className="truncate text-sm font-medium">{v.caption || "Untitled"}</p>
-            <p className="truncate text-xs text-muted-foreground">{v.creator?.display_name} · {v.view_count} views · {v.like_count} likes</p>
+            <p className="truncate text-xs text-muted-foreground">{v.view_count} views · {v.like_count} likes</p>
+            <Select value={v.creator_id} onValueChange={(val) => reassign(v.id, val)}>
+              <SelectTrigger className="h-8 rounded-lg glass text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {creators?.map((c) => <SelectItem key={c.id} value={c.id}>{c.display_name} (@{c.username})</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
           <button onClick={() => del(v.id)} className="tap-scale rounded-full p-2 text-destructive"><Trash2 className="h-4 w-4" /></button>
         </div>
@@ -375,14 +395,25 @@ function VideosTab() {
   );
 }
 
+type CreatorRow = {
+  id: string;
+  username: string;
+  display_name: string;
+  bio: string | null;
+  avatar_url: string | null;
+  cover_url: string | null;
+  video_count: number;
+};
+
 function CreatorsTab() {
   const qc = useQueryClient();
   const { data } = useQuery({
     queryKey: ["admin-creators"],
-    queryFn: async () => (await supabase.from("creators").select("*").order("created_at", { ascending: false })).data ?? [],
+    queryFn: async () => ((await supabase.from("creators").select("*").order("created_at", { ascending: false })).data ?? []) as CreatorRow[],
   });
   const [form, setForm] = useState({ username: "", display_name: "", bio: "", avatar_url: "" });
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<CreatorRow | null>(null);
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
@@ -419,10 +450,70 @@ function CreatorsTab() {
               <p className="truncate text-sm font-medium">{c.display_name}</p>
               <p className="truncate text-xs text-muted-foreground">@{c.username} · {c.video_count} videos</p>
             </div>
+            <button onClick={() => setEditing(c)} className="tap-scale rounded-full p-2 text-muted-foreground hover:text-foreground" aria-label="Edit"><Pencil className="h-4 w-4" /></button>
             <button onClick={() => del(c.id)} className="tap-scale rounded-full p-2 text-destructive"><Trash2 className="h-4 w-4" /></button>
           </div>
         ))}
       </div>
+      <EditCreatorDialog creator={editing} onClose={() => setEditing(null)} />
     </div>
+  );
+}
+
+function EditCreatorDialog({ creator, onClose }: { creator: CreatorRow | null; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [form, setForm] = useState({ username: "", display_name: "", bio: "", avatar_url: "", cover_url: "" });
+  const [busy, setBusy] = useState(false);
+
+  // Sync form when opening a different creator
+  const currentId = creator?.id ?? "";
+  const [loadedId, setLoadedId] = useState("");
+  if (creator && loadedId !== currentId) {
+    setLoadedId(currentId);
+    setForm({
+      username: creator.username,
+      display_name: creator.display_name,
+      bio: creator.bio ?? "",
+      avatar_url: creator.avatar_url ?? "",
+      cover_url: creator.cover_url ?? "",
+    });
+  }
+
+  async function save() {
+    if (!creator) return;
+    setBusy(true);
+    const { error } = await supabase.from("creators").update({
+      username: form.username,
+      display_name: form.display_name,
+      bio: form.bio || null,
+      avatar_url: form.avatar_url || null,
+      cover_url: form.cover_url || null,
+    }).eq("id", creator.id);
+    setBusy(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Creator updated");
+    qc.invalidateQueries({ queryKey: ["admin-creators"] });
+    qc.invalidateQueries({ queryKey: ["creators"] });
+    qc.invalidateQueries({ queryKey: ["creator", form.username] });
+    onClose();
+  }
+
+  return (
+    <Dialog open={!!creator} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="glass">
+        <DialogHeader><DialogTitle>Edit creator</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5"><Label>Username</Label><Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} className="h-11 rounded-xl glass" /></div>
+          <div className="space-y-1.5"><Label>Display name</Label><Input value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} className="h-11 rounded-xl glass" /></div>
+          <div className="space-y-1.5"><Label>Avatar URL</Label><Input value={form.avatar_url} onChange={(e) => setForm({ ...form, avatar_url: e.target.value })} className="h-11 rounded-xl glass" /></div>
+          <div className="space-y-1.5"><Label>Cover URL</Label><Input value={form.cover_url} onChange={(e) => setForm({ ...form, cover_url: e.target.value })} className="h-11 rounded-xl glass" /></div>
+          <div className="space-y-1.5"><Label>Bio</Label><Textarea value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} rows={3} className="rounded-xl glass" /></div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button onClick={save} disabled={busy} className="gradient-primary text-primary-foreground">{busy ? "Saving…" : "Save changes"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
