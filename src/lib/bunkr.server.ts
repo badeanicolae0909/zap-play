@@ -33,10 +33,10 @@ export async function scrapeBunkrAlbum(albumUrl: string): Promise<BunkrItem[]> {
   const u = new URL(albumUrl);
   const html = await fetchHtml(albumUrl);
 
-  // Items appear as <a href="/f/SLUG"> links. Dedupe and ignore template strings.
-  const slugs = new Set<string>();
-  for (const m of html.matchAll(/href="\/f\/([A-Za-z0-9_-]{6,})"/g)) {
-    slugs.add(m[1]);
+  // Items appear as <a href="/f/SLUG"> (bunkr) or <a href="/v/SLUG"> (turbo) links.
+  const slugs = new Map<string, string>(); // slug -> kind ("f" | "v")
+  for (const m of html.matchAll(/href="\/(f|v)\/([A-Za-z0-9_-]{6,})"/g)) {
+    slugs.set(m[2], m[1]);
   }
 
   const items: BunkrItem[] = [];
