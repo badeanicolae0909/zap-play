@@ -75,7 +75,7 @@ export const resolveBunkr = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ pageUrl: z.string().url().max(500) }).parse(d))
   .handler(async ({ data }) => {
     const u = assertBunkrUrl(data.pageUrl);
-    if (!/^\/f\//.test(u.pathname)) throw new Error("URL must be a /f/<slug> file page");
+    if (!/^\/(f|v)\//.test(u.pathname)) throw new Error("URL must be a /f/<slug> or /v/<slug> file page");
     return resolveBunkrPlayback(u.toString());
   });
 
