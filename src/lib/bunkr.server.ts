@@ -40,8 +40,8 @@ export async function scrapeBunkrAlbum(albumUrl: string): Promise<BunkrItem[]> {
   }
 
   const items: BunkrItem[] = [];
-  for (const slug of slugs) {
-    const pageUrl = `${u.origin}/f/${slug}`;
+  for (const [slug, kind] of slugs) {
+    const pageUrl = `${u.origin}/${kind}/${slug}`;
     try {
       const page = await fetchHtml(pageUrl);
       const type = (metaContent(page, "og:type") ?? "").toLowerCase();
