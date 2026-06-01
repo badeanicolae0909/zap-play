@@ -48,15 +48,20 @@ export function resolveVideoSource(rawUrl: string): VideoSource {
     if (id) return { kind: "iframe", src: `https://streamable.com/e/${id}?autoplay=1&muted=0` };
   }
 
-  // Turbo.cr — /v/{id} -> /embed/{id}
+  // Turbo.cr — part of the bunkr network, file pages live at /v/<slug> and
+  // expose the same jsCDN/signUrl shape, so resolve them through the bunkr pipeline.
   if (host === "turbo.cr" || host.endsWith(".turbo.cr")) {
-    const m = path.match(/^\/(?:v|embed)\/([^/]+)/);
-    if (m) return { kind: "iframe", src: `https://turbo.cr/embed/${m[1]}?autoplay=1&muted=1` };
+    if (/^\/(v|f|embed)\//.test(path)) {
+      // Normalize /embed/<id> back to /v/<id> for resolver consistency.
+      const m = path.match(/^\/(?:v|f|embed)\/([^/]+)/);
+      if (m) return { kind: "bunkr", src: `${u.origin}/v/${m[1]}` };
+    }
   }
 
-  // Bunkr file pages — store the page URL, resolve to signed mp4 at playback time
-  if (/(^|\.)bunkr\.(cr|si|ru|ph|la|is|to|ws|ac|black|red|media|site)$/i.test(host)) {
-    if (/^\/f\//.test(path)) return { kind: "bunkr", src: url };
+  // Bunkr file pages — store the page URL, resolve to signed mp4 at playback time.
+  // Bunkr rotates TLDs frequently; keep this list wide.
+  if (/(^|\.)(bunkr|bunkrr)\.(ac|ax|black|ci|cr|fi|is|la|media|ph|pk|red|ru|si|site|st|sk|to|ws)$/i.test(host)) {
+    if (/^\/(f|v)\//.test(path)) return { kind: "bunkr", src: url };
   }
 
   // Streamtape / mixdrop / doodstream / dood.* — common /v/ID -> /e/ID embed pattern

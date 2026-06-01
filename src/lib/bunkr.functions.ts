@@ -4,12 +4,14 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { scrapeBunkrAlbum, resolveBunkrPlayback, type BunkrItem } from "./bunkr.server";
 
-const BUNKR_HOST = /(^|\.)bunkr\.(cr|si|ru|ph|la|is|to|ws|ac|black|red|media|site)$/i;
+// Bunkr operates under many rotating TLDs; turbo.cr is part of the same network
+// and serves file pages with the same jsCDN/signUrl shape, so we treat it the same.
+const BUNKR_HOST = /(^|\.)(bunkr|bunkrr|turbo)\.(ac|ax|black|ci|cr|fi|is|la|media|ph|pk|red|ru|si|site|st|sk|to|ws)$/i;
 
 function assertBunkrUrl(raw: string): URL {
   let u: URL;
   try { u = new URL(raw); } catch { throw new Error("Invalid URL"); }
-  if (!BUNKR_HOST.test(u.hostname)) throw new Error("Not a bunkr URL");
+  if (!BUNKR_HOST.test(u.hostname)) throw new Error("Not a bunkr/turbo URL");
   return u;
 }
 
@@ -73,7 +75,7 @@ export const resolveBunkr = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ pageUrl: z.string().url().max(500) }).parse(d))
   .handler(async ({ data }) => {
     const u = assertBunkrUrl(data.pageUrl);
-    if (!/^\/f\//.test(u.pathname)) throw new Error("URL must be a /f/<slug> file page");
+    if (!/^\/(f|v)\//.test(u.pathname)) throw new Error("URL must be a /f/<slug> or /v/<slug> file page");
     return resolveBunkrPlayback(u.toString());
   });
 
