@@ -33,9 +33,17 @@ export const scrapeBunkr = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context.userId);
     const u = assertBunkrUrl(data.albumUrl);
-    if (!/^\/a\//.test(u.pathname)) throw new Error("URL must be a /a/<id> album");
-    const items = await scrapeBunkrAlbum(u.toString());
-    return { items: items.filter((i) => i.type === "video") };
+    // Album page: scrape all items. Single file page (/f/ or /v/): return that one item.
+    if (/^\/a\//.test(u.pathname)) {
+      const items = await scrapeBunkrAlbum(u.toString());
+      return { items: items.filter((i) => i.type === "video") };
+    }
+    if (/^\/(f|v)\//.test(u.pathname)) {
+      const { scrapeBunkrSingle } = await import("./bunkr.server");
+      const item = await scrapeBunkrSingle(u.toString());
+      return { items: item && item.type === "video" ? [item] : [] };
+    }
+    throw new Error("URL must be a /a/<id> album or /f|v/<slug> file page");
   });
 
 // Admin: bulk-insert selected items as videos for a creator.
