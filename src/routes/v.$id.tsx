@@ -1,5 +1,6 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { ChevronLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { VideoFeed } from "@/components/VideoFeed";
@@ -14,16 +15,30 @@ function VideoPage() {
   const router = useRouter();
   const { user } = useAuth();
 
-  const { data: video, isLoading } = useQuery({
-    queryKey: ["video", id],
+  // Fetch the tapped video first to discover its creator, then fetch the full
+  // creator feed so the user can swipe through the rest like on the main feed.
+  const { data, isLoading } = useQuery({
+    queryKey: ["video-creator-feed", id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: target, error: e1 } = await supabase
         .from("videos")
-        .select("id, video_url, thumbnail_url, caption, tags, like_count, view_count, creator:creators(id, username, display_name, avatar_url)")
+        .select("id, video_url, thumbnail_url, caption, tags, like_count, view_count, creator_id, creator:creators(id, username, display_name, avatar_url)")
         .eq("id", id)
         .maybeSingle();
-      if (error) throw error;
-      return data as unknown as FeedVideo | null;
+      if (e1) throw e1;
+      if (!target) return { target: null as FeedVideo | null, list: [] as FeedVideo[] };
+
+      const { data: list, error: e2 } = await supabase
+        .from("videos")
+        .select("id, video_url, thumbnail_url, caption, tags, like_count, view_count, creator:creators(id, username, display_name, avatar_url)")
+        .eq("creator_id", (target as { creator_id: string }).creator_id)
+        .order("created_at", { ascending: false });
+      if (e2) throw e2;
+
+      return {
+        target: target as unknown as FeedVideo,
+        list: (list ?? []) as unknown as FeedVideo[],
+      };
     },
   });
 
@@ -32,6 +47,13 @@ function VideoPage() {
     queryFn: () => fetchUserInteractions(user!.id),
     enabled: !!user,
   });
+
+  // Put the tapped video first, then the rest of the creator's videos.
+  const ordered = useMemo<FeedVideo[]>(() => {
+    if (!data?.target) return [];
+    const rest = data.list.filter((v) => v.id !== data.target!.id);
+    return [data.target, ...rest];
+  }, [data]);
 
   return (
     <main className="fixed inset-0 bg-background">
@@ -45,7 +67,7 @@ function VideoPage() {
       </button>
 
       <VideoFeed
-        videos={video ? [video] : []}
+        videos={ordered}
         likedSet={inter?.liked}
         savedSet={inter?.saved}
         loading={isLoading}
