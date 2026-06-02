@@ -29,6 +29,23 @@ export type BunkrItem = {
   type: "video" | "image" | "other";
 };
 
+export async function scrapeBunkrSingle(pageUrl: string): Promise<BunkrItem | null> {
+  try {
+    const page = await fetchHtml(pageUrl);
+    const type = (metaContent(page, "og:type") ?? "").toLowerCase();
+    const title = metaContent(page, "og:title") ?? pageUrl;
+    const thumbnail = metaContent(page, "og:image");
+    return {
+      pageUrl,
+      title,
+      thumbnail,
+      type: type === "video" ? "video" : type === "image" ? "image" : "other",
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function scrapeBunkrAlbum(albumUrl: string): Promise<BunkrItem[]> {
   const u = new URL(albumUrl);
   const html = await fetchHtml(albumUrl);
