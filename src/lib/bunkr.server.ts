@@ -32,15 +32,18 @@ export type BunkrItem = {
 export async function scrapeBunkrSingle(pageUrl: string): Promise<BunkrItem | null> {
   try {
     const page = await fetchHtml(pageUrl);
-    const type = (metaContent(page, "og:type") ?? "").toLowerCase();
+    const ogType = (metaContent(page, "og:type") ?? "").toLowerCase();
     const title = metaContent(page, "og:title") ?? pageUrl;
     const thumbnail = metaContent(page, "og:image");
-    return {
-      pageUrl,
-      title,
-      thumbnail,
-      type: type === "video" ? "video" : type === "image" ? "image" : "other",
-    };
+    // Many hosts (e.g. turbo.cr) don't set og:type=video. Infer from the URL
+    // path (/v/ or /f/ on these hosts always means a video file) or from a
+    // .mp4/.webm/.mov hint in the title.
+    let type: "video" | "image" | "other" = "other";
+    if (ogType === "video") type = "video";
+    else if (ogType === "image") type = "image";
+    else if (/^\/(v|f)\//.test(new URL(pageUrl).pathname)) type = "video";
+    else if (/\.(mp4|webm|mov|m4v)\b/i.test(title)) type = "video";
+    return { pageUrl, title, thumbnail, type };
   } catch {
     return null;
   }

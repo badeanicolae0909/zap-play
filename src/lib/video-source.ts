@@ -48,14 +48,11 @@ export function resolveVideoSource(rawUrl: string): VideoSource {
     if (id) return { kind: "iframe", src: `https://streamable.com/e/${id}?autoplay=1&muted=0` };
   }
 
-  // Turbo.cr — part of the bunkr network, file pages live at /v/<slug> and
-  // expose the same jsCDN/signUrl shape, so resolve them through the bunkr pipeline.
+  // Turbo.cr — serves video through an obfuscated /embed/<id> iframe
+  // (WASM-signed URLs that aren't reproducible server-side). Embed the iframe directly.
   if (host === "turbo.cr" || host.endsWith(".turbo.cr")) {
-    if (/^\/(v|f|embed)\//.test(path)) {
-      // Normalize /embed/<id> back to /v/<id> for resolver consistency.
-      const m = path.match(/^\/(?:v|f|embed)\/([^/]+)/);
-      if (m) return { kind: "bunkr", src: `${u.origin}/v/${m[1]}` };
-    }
+    const m = path.match(/^\/(?:v|f|embed)\/([A-Za-z0-9_-]+)/);
+    if (m) return { kind: "iframe", src: `${u.origin}/embed/${m[1]}` };
   }
 
   // Bunkr file pages — store the page URL, resolve to signed mp4 at playback time.
