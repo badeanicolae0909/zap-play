@@ -345,53 +345,165 @@ function FileDrop({ label, accept, file, onFile }: { label: string; accept: stri
   );
 }
 
+type AdminVideoRow = {
+  id: string;
+  caption: string | null;
+  view_count: number;
+  like_count: number;
+  video_url: string;
+  thumbnail_url: string | null;
+  creator_id: string;
+  is_featured: boolean;
+  tags: string[] | null;
+  creator?: { display_name: string } | null;
+};
+
 function VideosTab() {
   const qc = useQueryClient();
   const { data } = useQuery({
     queryKey: ["admin-videos"],
-    queryFn: async () => (await supabase.from("videos").select("id, caption, view_count, like_count, video_url, thumbnail_url, creator_id, creator:creators(display_name)").order("created_at", { ascending: false })).data ?? [],
+    queryFn: async () => ((await supabase.from("videos").select("id, caption, view_count, like_count, video_url, thumbnail_url, creator_id, is_featured, tags, creator:creators(display_name)").order("created_at", { ascending: false })).data ?? []) as AdminVideoRow[],
   });
   const { data: creators } = useQuery({
     queryKey: ["creators"],
     queryFn: async () => (await supabase.from("creators").select("id, display_name, username").order("display_name")).data ?? [],
   });
+  const [editing, setEditing] = useState<AdminVideoRow | null>(null);
   async function del(id: string) {
     if (!confirm("Delete this video?")) return;
     const { error } = await supabase.from("videos").delete().eq("id", id);
     if (error) toast.error(error.message);
     else { toast.success("Deleted"); qc.invalidateQueries({ queryKey: ["admin-videos"] }); qc.invalidateQueries({ queryKey: ["feed"] }); }
   }
-  async function reassign(id: string, creator_id: string) {
-    const { error } = await supabase.from("videos").update({ creator_id }).eq("id", id);
-    if (error) toast.error(error.message);
-    else {
-      toast.success("Creator updated");
-      qc.invalidateQueries({ queryKey: ["admin-videos"] });
-      qc.invalidateQueries({ queryKey: ["feed"] });
-      qc.invalidateQueries({ queryKey: ["admin-creators"] });
-    }
-  }
   return (
     <div className="space-y-2">
-      {data?.map((v: any) => (
+      {data?.map((v) => (
         <div key={v.id} className="flex items-center gap-3 rounded-2xl glass p-3">
-          <div className="h-16 w-12 overflow-hidden rounded-lg bg-card">
+          <button onClick={() => setEditing(v)} className="h-16 w-12 shrink-0 overflow-hidden rounded-lg bg-card tap-scale">
             {v.thumbnail_url ? <img src={v.thumbnail_url} className="h-full w-full object-cover" alt="" /> : <video src={v.video_url} className="h-full w-full object-cover" muted />}
-          </div>
-          <div className="min-w-0 flex-1 space-y-1.5">
+          </button>
+          <button onClick={() => setEditing(v)} className="min-w-0 flex-1 space-y-1 text-left">
             <p className="truncate text-sm font-medium">{v.caption || "Untitled"}</p>
-            <p className="truncate text-xs text-muted-foreground">{v.view_count} views · {v.like_count} likes</p>
-            <Select value={v.creator_id} onValueChange={(val) => reassign(v.id, val)}>
-              <SelectTrigger className="h-8 rounded-lg glass text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {creators?.map((c) => <SelectItem key={c.id} value={c.id}>{c.display_name} (@{c.username})</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+            <p className="truncate text-xs text-muted-foreground">@{v.creator?.display_name ?? "—"} · {v.view_count} views · {v.like_count} likes</p>
+            <p className="truncate text-[10px] text-muted-foreground/70">{v.video_url}</p>
+          </button>
+          <button onClick={() => setEditing(v)} className="tap-scale rounded-full p-2 text-muted-foreground hover:text-foreground" aria-label="Edit"><Pencil className="h-4 w-4" /></button>
           <button onClick={() => del(v.id)} className="tap-scale rounded-full p-2 text-destructive"><Trash2 className="h-4 w-4" /></button>
         </div>
       ))}
+      <EditVideoDialog video={editing} creators={creators ?? []} onClose={() => setEditing(null)} />
     </div>
+  );
+}
+
+function EditVideoDialog({ video, creators, onClose }: { video: AdminVideoRow | null; creators: Array<{ id: string; display_name: string; username: string }>; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [form, setForm] = useState({ caption: "", tags: "", video_url: "", thumbnail_url: "", creator_id: "", is_featured: false });
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [thumbFile, setThumbFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [loadedId, setLoadedId] = useState("");
+
+  if (video && loadedId !== video.id) {
+    setLoadedId(video.id);
+    setForm({
+      caption: video.caption ?? "",
+      tags: (video.tags ?? []).join(", "),
+      video_url: video.video_url,
+      thumbnail_url: video.thumbnail_url ?? "",
+      creator_id: video.creator_id,
+      is_featured: video.is_featured,
+    });
+    setVideoFile(null);
+    setThumbFile(null);
+  }
+
+  async function save() {
+    if (!video) return;
+    setBusy(true);
+    try {
+      let finalVideoUrl = form.video_url.trim();
+      let finalThumbUrl = form.thumbnail_url.trim();
+      if (videoFile) {
+        const ext = videoFile.name.split(".").pop();
+        const key = `${form.creator_id}/${Date.now()}.${ext}`;
+        const { error: upErr } = await supabase.storage.from("videos").upload(key, videoFile, { upsert: false, contentType: videoFile.type });
+        if (upErr) throw upErr;
+        finalVideoUrl = supabase.storage.from("videos").getPublicUrl(key).data.publicUrl;
+      }
+      if (thumbFile) {
+        const ext = thumbFile.name.split(".").pop();
+        const key = `${form.creator_id}/${Date.now()}.${ext}`;
+        const { error: upErr } = await supabase.storage.from("thumbnails").upload(key, thumbFile, { upsert: false, contentType: thumbFile.type });
+        if (upErr) throw upErr;
+        finalThumbUrl = supabase.storage.from("thumbnails").getPublicUrl(key).data.publicUrl;
+      }
+      const { error } = await supabase.from("videos").update({
+        caption: form.caption || null,
+        tags: form.tags ? form.tags.split(",").map((t) => t.trim().replace(/^#/, "")).filter(Boolean) : [],
+        video_url: finalVideoUrl,
+        thumbnail_url: finalThumbUrl || null,
+        creator_id: form.creator_id,
+        is_featured: form.is_featured,
+      }).eq("id", video.id);
+      if (error) throw error;
+      toast.success("Video updated");
+      qc.invalidateQueries({ queryKey: ["admin-videos"] });
+      qc.invalidateQueries({ queryKey: ["feed"] });
+      onClose();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const isStorage = form.video_url.includes("/storage/v1/object/public/videos/");
+
+  return (
+    <Dialog open={!!video} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="glass max-h-[90vh] overflow-y-auto">
+        <DialogHeader><DialogTitle>Edit video</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>Creator</Label>
+            <Select value={form.creator_id} onValueChange={(v) => setForm({ ...form, creator_id: v })}>
+              <SelectTrigger className="h-11 rounded-xl glass"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {creators.map((c) => <SelectItem key={c.id} value={c.id}>{c.display_name} (@{c.username})</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Video URL {isStorage && <span className="text-[10px] text-muted-foreground">(stored in DB)</span>}</Label>
+            <Input value={form.video_url} onChange={(e) => setForm({ ...form, video_url: e.target.value })} className="h-11 rounded-xl glass" />
+          </div>
+          <FileDrop label={isStorage ? "Replace with better version (optional)" : "Upload a copy to storage (optional)"} accept="video/*" file={videoFile} onFile={setVideoFile} />
+          <div className="space-y-1.5">
+            <Label>Thumbnail URL</Label>
+            <Input value={form.thumbnail_url} onChange={(e) => setForm({ ...form, thumbnail_url: e.target.value })} className="h-11 rounded-xl glass" placeholder="https://…" />
+          </div>
+          <FileDrop label="Replace thumbnail (optional)" accept="image/*" file={thumbFile} onFile={setThumbFile} />
+          <div className="space-y-1.5">
+            <Label>Caption</Label>
+            <Textarea value={form.caption} onChange={(e) => setForm({ ...form, caption: e.target.value })} rows={3} className="rounded-xl glass" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Tags (comma separated)</Label>
+            <Input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} className="h-11 rounded-xl glass" placeholder="cinematic, travel" />
+          </div>
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            <input type="checkbox" checked={form.is_featured} onChange={(e) => setForm({ ...form, is_featured: e.target.checked })} className="h-4 w-4 rounded" />
+            Featured
+          </label>
+          <p className="text-[10px] text-muted-foreground">Stats: {video?.view_count ?? 0} views · {video?.like_count ?? 0} likes</p>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button onClick={save} disabled={busy} className="gradient-primary text-primary-foreground">{busy ? "Saving…" : "Save changes"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
