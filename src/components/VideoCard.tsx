@@ -174,6 +174,23 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
     }
   }
 
+  function editAsAdmin() {
+    haptic("light");
+    navigate({ to: "/admin", search: { tab: "videos", edit: video.id } });
+  }
+
+  async function deleteAsAdmin() {
+    setDeleting(true);
+    const { error } = await supabase.from("videos").delete().eq("id", video.id);
+    setDeleting(false);
+    setConfirmDelete(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Video deleted");
+    qc.invalidateQueries({ queryKey: ["feed"] });
+    qc.invalidateQueries({ queryKey: ["admin-videos"] });
+  }
+
+
   function handleDoubleTap() {
     if (!liked) toggleLike();
     setLikeBurst((n) => n + 1);
