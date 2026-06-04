@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Heart, Bookmark, Share2, Play, Volume2, VolumeX, Music2, FastForward, Rewind, Loader2 } from "lucide-react";
-import { Link } from "@tanstack/react-router";
+import { Heart, Bookmark, Share2, Play, Volume2, VolumeX, Music2, FastForward, Rewind, Loader2, Pencil, Trash2 } from "lucide-react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
 import { useAuth } from "@/lib/auth";
 import { haptic, hapticSuccess } from "@/lib/telegram";
 import { toast } from "sonner";
