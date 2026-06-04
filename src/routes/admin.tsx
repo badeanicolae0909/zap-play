@@ -367,7 +367,7 @@ type AdminVideoRow = {
   creator?: { display_name: string } | null;
 };
 
-function VideosTab() {
+function VideosTab({ initialEditId }: { initialEditId?: string }) {
   const qc = useQueryClient();
   const { data } = useQuery({
     queryKey: ["admin-videos"],
@@ -378,6 +378,12 @@ function VideosTab() {
     queryFn: async () => (await supabase.from("creators").select("id, display_name, username").order("display_name")).data ?? [],
   });
   const [editing, setEditing] = useState<AdminVideoRow | null>(null);
+  const [autoOpened, setAutoOpened] = useState<string | null>(null);
+  if (initialEditId && data && autoOpened !== initialEditId) {
+    const found = data.find((v) => v.id === initialEditId);
+    if (found) { setAutoOpened(initialEditId); setEditing(found); }
+  }
+
   async function del(id: string) {
     if (!confirm("Delete this video?")) return;
     const { error } = await supabase.from("videos").delete().eq("id", id);
