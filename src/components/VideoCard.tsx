@@ -100,7 +100,12 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
   useEffect(() => {
     if (active && !viewedRef.current) {
       viewedRef.current = true;
-      supabase.from("video_views").insert({ video_id: video.id, user_id: user?.id ?? null });
+      void supabase
+        .from("video_views")
+        .insert({ video_id: video.id, user_id: user?.id ?? null })
+        .then(({ error }) => {
+          if (error) console.warn("view insert failed", error);
+        });
     }
     const v = ref.current;
     if (!v) return;
