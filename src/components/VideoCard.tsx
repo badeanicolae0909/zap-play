@@ -78,7 +78,12 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
   const [scrubbing, setScrubbing] = useState(false);
   const [seekIndicator, setSeekIndicator] = useState<{ dir: 1 | -1; speed: number } | null>(null);
   const [controlsVisible, setControlsVisible] = useState(true);
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   const viewedRef = useRef(false);
 
   const progressRef = useRef<HTMLDivElement>(null);
