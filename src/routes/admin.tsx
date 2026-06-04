@@ -13,11 +13,19 @@ import { Upload, Trash2, Plus, Film, Users, Shield, Download, Loader2, Pencil } 
 import { scrapeBunkr, importBunkr } from "@/lib/bunkr.functions";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
-export const Route = createFileRoute("/admin")({ component: AdminPage });
+export const Route = createFileRoute("/admin")({
+  component: AdminPage,
+  validateSearch: (s: Record<string, unknown>) => ({
+    tab: (s.tab as "upload" | "videos" | "creators" | undefined) ?? undefined,
+    edit: (s.edit as string | undefined) ?? undefined,
+  }),
+});
 
 function AdminPage() {
   const { user, isAdmin, isAnonymous, loading } = useAuth();
-  const [tab, setTab] = useState<"upload" | "videos" | "creators">("upload");
+  const search = Route.useSearch();
+  const [tab, setTab] = useState<"upload" | "videos" | "creators">(search.tab ?? (search.edit ? "videos" : "upload"));
+
   const [claiming, setClaiming] = useState(false);
 
   if (loading) return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Loading…</div>;
@@ -68,8 +76,9 @@ function AdminPage() {
         </div>
 
         {tab === "upload" && <UploadTab />}
-        {tab === "videos" && <VideosTab />}
+        {tab === "videos" && <VideosTab initialEditId={search.edit} />}
         {tab === "creators" && <CreatorsTab />}
+
       </div>
     </main>
   );
@@ -358,7 +367,7 @@ type AdminVideoRow = {
   creator?: { display_name: string } | null;
 };
 
-function VideosTab() {
+function VideosTab({ initialEditId }: { initialEditId?: string }) {
   const qc = useQueryClient();
   const { data } = useQuery({
     queryKey: ["admin-videos"],
@@ -369,6 +378,12 @@ function VideosTab() {
     queryFn: async () => (await supabase.from("creators").select("id, display_name, username").order("display_name")).data ?? [],
   });
   const [editing, setEditing] = useState<AdminVideoRow | null>(null);
+  const [autoOpened, setAutoOpened] = useState<string | null>(null);
+  if (initialEditId && data && autoOpened !== initialEditId) {
+    const found = data.find((v) => v.id === initialEditId);
+    if (found) { setAutoOpened(initialEditId); setEditing(found); }
+  }
+
   async function del(id: string) {
     if (!confirm("Delete this video?")) return;
     const { error } = await supabase.from("videos").delete().eq("id", id);
