@@ -441,7 +441,37 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
         <ActionBtn onClick={toggleLike} icon={<Heart className={`h-7 w-7 ${liked ? "fill-primary text-primary" : ""}`} />} label={fmt(likeCount)} active={liked} />
         <ActionBtn onClick={toggleSave} icon={<Bookmark className={`h-7 w-7 ${saved ? "fill-accent text-accent" : ""}`} />} label="Save" active={saved} />
         <ActionBtn onClick={share} icon={<Share2 className="h-7 w-7" />} label="Share" />
+        {isAdmin && (
+          <>
+            <ActionBtn onClick={editAsAdmin} icon={<Pencil className="h-7 w-7" />} label="Edit" />
+            <ActionBtn onClick={() => setConfirmDelete(true)} icon={<Trash2 className="h-7 w-7 text-destructive" />} label="Delete" />
+          </>
+        )}
       </div>
+
+      {isAdmin && (
+        <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+          <AlertDialogContent className="glass">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete this video?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This permanently removes the video from the feed. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={deleting}
+                onClick={(e) => { e.preventDefault(); deleteAsAdmin(); }}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {deleting ? "Deleting…" : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
 
       {/* Bottom info */}
       <div className={`absolute inset-x-0 bottom-28 z-10 px-4 transition-opacity duration-300 ${controlsVisible || paused ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
