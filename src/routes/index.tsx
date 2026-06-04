@@ -12,6 +12,9 @@ function Index() {
   const { data: videos, isLoading } = useQuery({
     queryKey: ["feed"],
     queryFn: () => fetchFeed(30),
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: "always",
   });
   const { data: inter } = useQuery({
     queryKey: ["interactions", user?.id],
