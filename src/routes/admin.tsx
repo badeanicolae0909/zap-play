@@ -76,8 +76,9 @@ function AdminPage() {
         </div>
 
         {tab === "upload" && <UploadTab />}
-        {tab === "videos" && <VideosTab />}
+        {tab === "videos" && <VideosTab initialEditId={search.edit} />}
         {tab === "creators" && <CreatorsTab />}
+
       </div>
     </main>
   );
