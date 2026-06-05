@@ -135,6 +135,34 @@ function UploadTab() {
           await supabase.storage.from("thumbnails").upload(tkey, thumb, { contentType: thumb.type });
           finalThumbUrl = supabase.storage.from("thumbnails").getPublicUrl(tkey).data.publicUrl;
         }
+      } else if (mode === "bunny") {
+        if (!file) { toast.error("Pick a video file"); setBusy(false); return; }
+        const title = caption?.trim() || file.name;
+        const sig = await bunnyCreate({ data: { title } });
+        setProgress(15);
+        await new Promise<void>((resolve, reject) => {
+          const upload = new tus.Upload(file, {
+            endpoint: "https://video.bunnycdn.com/tusupload",
+            retryDelays: [0, 3000, 5000, 10000, 20000],
+            headers: {
+              AuthorizationSignature: sig.signature,
+              AuthorizationExpire: String(sig.expirationTime),
+              VideoId: sig.guid,
+              LibraryId: sig.libraryId,
+            },
+            metadata: { filetype: file.type, title },
+            onError: (err) => reject(err),
+            onProgress: (sent, total) => setProgress(15 + Math.round((sent / total) * 70)),
+            onSuccess: () => resolve(),
+          });
+          upload.start();
+        });
+        finalVideoUrl = sig.embedUrl;
+        if (thumb) {
+          const tkey = `${creatorId}/${Date.now()}.${thumb.name.split(".").pop()}`;
+          await supabase.storage.from("thumbnails").upload(tkey, thumb, { contentType: thumb.type });
+          finalThumbUrl = supabase.storage.from("thumbnails").getPublicUrl(tkey).data.publicUrl;
+        }
       } else {
         if (!videoUrl.trim()) { toast.error("Paste a video URL"); setBusy(false); return; }
         try { new URL(videoUrl.trim()); } catch { toast.error("Invalid URL"); setBusy(false); return; }
