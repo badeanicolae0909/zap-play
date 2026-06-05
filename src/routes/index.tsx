@@ -11,7 +11,7 @@ function Index() {
   const { user } = useAuth();
   const { data: videos, isLoading } = useQuery({
     queryKey: ["feed"],
-    queryFn: () => fetchFeed(30),
+    queryFn: () => fetchFeed(200),
     staleTime: 0,
     gcTime: 0,
     refetchOnMount: "always",
