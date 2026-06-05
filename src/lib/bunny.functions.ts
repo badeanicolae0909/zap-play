@@ -36,7 +36,6 @@ export const createBunnyUpload = createServerFn({ method: "POST" })
       libraryId,
       signature,
       expirationTime,
-      embedUrl: `https://iframe.mediadelivery.net/embed/${libraryId}/${guid}`,
-      thumbnailUrl: `https://vz-${libraryId}.b-cdn.net/${guid}/thumbnail.jpg`,
+      embedUrl: `https://iframe.mediadelivery.net/embed/${libraryId}/${guid}?autoplay=true&muted=false&loop=false&preload=true&responsive=true`,
     };
   });
