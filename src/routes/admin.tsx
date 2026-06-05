@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Upload, Trash2, Plus, Film, Users, Shield, Download, Loader2, Pencil } from "lucide-react";
 import { scrapeBunkr, importBunkr } from "@/lib/bunkr.functions";
+import { createBunnyUpload } from "@/lib/bunny.functions";
+import * as tus from "tus-js-client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/admin")({
@@ -98,7 +101,7 @@ function UploadTab() {
     queryKey: ["creators"],
     queryFn: async () => (await supabase.from("creators").select("id, display_name, username").order("display_name")).data ?? [],
   });
-  const [mode, setMode] = useState<"file" | "url">("url");
+  const [mode, setMode] = useState<"file" | "url" | "bunny">("url");
   const [creatorId, setCreatorId] = useState("");
   const [caption, setCaption] = useState("");
   const [tags, setTags] = useState("");
@@ -109,6 +112,7 @@ function UploadTab() {
   const [featured, setFeatured] = useState(false);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
+  const bunnyCreate = useServerFn(createBunnyUpload);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -126,6 +130,34 @@ function UploadTab() {
         if (upErr) throw upErr;
         setProgress(60);
         finalVideoUrl = supabase.storage.from("videos").getPublicUrl(key).data.publicUrl;
+        if (thumb) {
+          const tkey = `${creatorId}/${Date.now()}.${thumb.name.split(".").pop()}`;
+          await supabase.storage.from("thumbnails").upload(tkey, thumb, { contentType: thumb.type });
+          finalThumbUrl = supabase.storage.from("thumbnails").getPublicUrl(tkey).data.publicUrl;
+        }
+      } else if (mode === "bunny") {
+        if (!file) { toast.error("Pick a video file"); setBusy(false); return; }
+        const title = caption?.trim() || file.name;
+        const sig = await bunnyCreate({ data: { title } });
+        setProgress(15);
+        await new Promise<void>((resolve, reject) => {
+          const upload = new tus.Upload(file, {
+            endpoint: "https://video.bunnycdn.com/tusupload",
+            retryDelays: [0, 3000, 5000, 10000, 20000],
+            headers: {
+              AuthorizationSignature: sig.signature,
+              AuthorizationExpire: String(sig.expirationTime),
+              VideoId: sig.guid,
+              LibraryId: sig.libraryId,
+            },
+            metadata: { filetype: file.type, title },
+            onError: (err) => reject(err),
+            onProgress: (sent, total) => setProgress(15 + Math.round((sent / total) * 70)),
+            onSuccess: () => resolve(),
+          });
+          upload.start();
+        });
+        finalVideoUrl = sig.embedUrl;
         if (thumb) {
           const tkey = `${creatorId}/${Date.now()}.${thumb.name.split(".").pop()}`;
           await supabase.storage.from("thumbnails").upload(tkey, thumb, { contentType: thumb.type });
@@ -164,9 +196,10 @@ function UploadTab() {
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-2 rounded-2xl glass p-1">
-        <button type="button" onClick={() => setMode("url")} className={`rounded-xl px-3 py-2.5 text-sm font-medium transition ${mode === "url" ? "gradient-primary text-primary-foreground" : "text-muted-foreground"}`}>From URL</button>
-        <button type="button" onClick={() => setMode("file")} className={`rounded-xl px-3 py-2.5 text-sm font-medium transition ${mode === "file" ? "gradient-primary text-primary-foreground" : "text-muted-foreground"}`}>Upload file</button>
+      <div className="grid grid-cols-3 gap-2 rounded-2xl glass p-1">
+        <button type="button" onClick={() => setMode("url")} className={`rounded-xl px-2 py-2.5 text-xs font-medium transition ${mode === "url" ? "gradient-primary text-primary-foreground" : "text-muted-foreground"}`}>From URL</button>
+        <button type="button" onClick={() => setMode("file")} className={`rounded-xl px-2 py-2.5 text-xs font-medium transition ${mode === "file" ? "gradient-primary text-primary-foreground" : "text-muted-foreground"}`}>Supabase</button>
+        <button type="button" onClick={() => setMode("bunny")} className={`rounded-xl px-2 py-2.5 text-xs font-medium transition ${mode === "bunny" ? "gradient-primary text-primary-foreground" : "text-muted-foreground"}`}>Bunny Stream</button>
       </div>
 
       <div className="space-y-1.5">
@@ -183,6 +216,12 @@ function UploadTab() {
         <>
           <FileDrop label="Video file (MP4)" accept="video/*" onFile={setFile} file={file} />
           <FileDrop label="Thumbnail (optional)" accept="image/*" onFile={setThumb} file={thumb} />
+        </>
+      ) : mode === "bunny" ? (
+        <>
+          <FileDrop label="Video file → Bunny Stream" accept="video/*" onFile={setFile} file={file} />
+          <FileDrop label="Thumbnail (optional)" accept="image/*" onFile={setThumb} file={thumb} />
+          <p className="text-[11px] text-muted-foreground">Uploads directly to Bunny Stream via secure TUS (API key stays on the server). The video plays through the Bunny iframe player.</p>
         </>
       ) : (
         <>
