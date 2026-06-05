@@ -42,6 +42,9 @@ export function resolveVideoSource(rawUrl: string): VideoSource {
   }
   if (host === "player.vimeo.com") return { kind: "iframe", src: url };
 
+  // Bunny Stream — iframe embed (already includes autoplay params from server)
+  if (host === "iframe.mediadelivery.net") return { kind: "iframe", src: url };
+
   // Streamable
   if (host === "streamable.com") {
     const id = path.split("/").filter(Boolean)[0];
