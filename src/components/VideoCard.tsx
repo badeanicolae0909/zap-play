@@ -326,7 +326,9 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
               allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
               allowFullScreen
               referrerPolicy="no-referrer"
-              className="absolute inset-0 h-full w-full border-0"
+              // pointer-events disabled so vertical swipes reach the snap
+              // container instead of being swallowed by the embed.
+              className="absolute inset-0 h-full w-full border-0 pointer-events-none"
             />
           ) : null}
         </>
