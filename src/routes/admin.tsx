@@ -101,7 +101,7 @@ function UploadTab() {
     queryKey: ["creators"],
     queryFn: async () => (await supabase.from("creators").select("id, display_name, username").order("display_name")).data ?? [],
   });
-  const [mode, setMode] = useState<"file" | "url">("url");
+  const [mode, setMode] = useState<"file" | "url" | "bunny">("url");
   const [creatorId, setCreatorId] = useState("");
   const [caption, setCaption] = useState("");
   const [tags, setTags] = useState("");
@@ -112,6 +112,7 @@ function UploadTab() {
   const [featured, setFeatured] = useState(false);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
+  const bunnyCreate = useServerFn(createBunnyUpload);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
