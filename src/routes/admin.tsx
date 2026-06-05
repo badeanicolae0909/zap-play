@@ -196,9 +196,10 @@ function UploadTab() {
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-2 rounded-2xl glass p-1">
-        <button type="button" onClick={() => setMode("url")} className={`rounded-xl px-3 py-2.5 text-sm font-medium transition ${mode === "url" ? "gradient-primary text-primary-foreground" : "text-muted-foreground"}`}>From URL</button>
-        <button type="button" onClick={() => setMode("file")} className={`rounded-xl px-3 py-2.5 text-sm font-medium transition ${mode === "file" ? "gradient-primary text-primary-foreground" : "text-muted-foreground"}`}>Upload file</button>
+      <div className="grid grid-cols-3 gap-2 rounded-2xl glass p-1">
+        <button type="button" onClick={() => setMode("url")} className={`rounded-xl px-2 py-2.5 text-xs font-medium transition ${mode === "url" ? "gradient-primary text-primary-foreground" : "text-muted-foreground"}`}>From URL</button>
+        <button type="button" onClick={() => setMode("file")} className={`rounded-xl px-2 py-2.5 text-xs font-medium transition ${mode === "file" ? "gradient-primary text-primary-foreground" : "text-muted-foreground"}`}>Supabase</button>
+        <button type="button" onClick={() => setMode("bunny")} className={`rounded-xl px-2 py-2.5 text-xs font-medium transition ${mode === "bunny" ? "gradient-primary text-primary-foreground" : "text-muted-foreground"}`}>Bunny Stream</button>
       </div>
 
       <div className="space-y-1.5">
@@ -215,6 +216,12 @@ function UploadTab() {
         <>
           <FileDrop label="Video file (MP4)" accept="video/*" onFile={setFile} file={file} />
           <FileDrop label="Thumbnail (optional)" accept="image/*" onFile={setThumb} file={thumb} />
+        </>
+      ) : mode === "bunny" ? (
+        <>
+          <FileDrop label="Video file → Bunny Stream" accept="video/*" onFile={setFile} file={file} />
+          <FileDrop label="Thumbnail (optional)" accept="image/*" onFile={setThumb} file={thumb} />
+          <p className="text-[11px] text-muted-foreground">Uploads directly to Bunny Stream via secure TUS (API key stays on the server). The video plays through the Bunny iframe player.</p>
         </>
       ) : (
         <>
