@@ -22,7 +22,8 @@ function shuffle<T>(arr: T[]): T[] {
 
 export async function fetchFeed(limit = 30, creatorId?: string): Promise<FeedVideo[]> {
   // Pull a wider pool so we have room to interleave + randomize per visit.
-  const pool = creatorId ? limit : Math.max(limit * 2, 60);
+  // Pull a much wider pool so every creator gets representation in the mix.
+  const pool = creatorId ? limit : 500;
   let q = supabase
     .from("videos")
     .select("id, video_url, thumbnail_url, caption, tags, like_count, view_count, creator:creators(id, username, display_name, avatar_url)")
@@ -36,16 +37,42 @@ export async function fetchFeed(limit = 30, creatorId?: string): Promise<FeedVid
   // Single-creator feeds keep chronological order.
   if (creatorId) return all.slice(0, limit);
 
-  const direct = shuffle(all.filter((v) => isDirectUpload(v.video_url)));
-  const link = shuffle(all.filter((v) => !isDirectUpload(v.video_url)));
+  // Group by creator, shuffle each group, then round-robin so every creator
+  // gets a turn before any creator gets a second video. This guarantees
+  // diversity across the visible feed instead of bunching one creator together.
+  const byCreator = new Map<string, FeedVideo[]>();
+  for (const v of all) {
+    const key = v.creator?.id ?? "_none";
+    if (!byCreator.has(key)) byCreator.set(key, []);
+    byCreator.get(key)!.push(v);
+  }
+  const buckets = shuffle(Array.from(byCreator.values()).map((g) => shuffle(g)));
 
-  // Interleave starting with a direct upload so the first card plays instantly,
-  // giving link-based videos time to resolve in the background.
   const out: FeedVideo[] = [];
-  let di = 0, li = 0;
-  while (out.length < limit && (di < direct.length || li < link.length)) {
-    if (di < direct.length) out.push(direct[di++]);
-    if (out.length < limit && li < link.length) out.push(link[li++]);
+  let lastCreator: string | null = null;
+  let firstPass = true;
+  while (out.length < limit && buckets.some((b) => b.length)) {
+    // First pass: prioritize direct uploads so the very first card plays
+    // instantly. After that, just round-robin in shuffled order.
+    const order = buckets
+      .map((b, i) => ({ b, i }))
+      .filter((x) => x.b.length > 0)
+      .sort((a, b) => {
+        if (!firstPass) return 0;
+        const ad = isDirectUpload(a.b[0].video_url) ? 0 : 1;
+        const bd = isDirectUpload(b.b[0].video_url) ? 0 : 1;
+        return ad - bd;
+      });
+    for (const { b } of order) {
+      if (out.length >= limit) break;
+      const cid = b[0].creator?.id ?? "_none";
+      // Avoid same creator twice in a row when alternatives still exist.
+      if (cid === lastCreator && order.some((o) => (o.b[0].creator?.id ?? "_none") !== lastCreator)) continue;
+      const next = b.shift()!;
+      out.push(next);
+      lastCreator = cid;
+    }
+    firstPass = false;
   }
   return out;
 }
