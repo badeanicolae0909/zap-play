@@ -8,13 +8,26 @@ type Props = {
   savedSet?: Set<string>;
   loading?: boolean;
   emptyText?: string;
+  initialIndex?: number;
 };
 
-export function VideoFeed({ videos, likedSet, savedSet, loading, emptyText }: Props) {
-  const [active, setActive] = useState(0);
+export function VideoFeed({ videos, likedSet, savedSet, loading, emptyText, initialIndex }: Props) {
+  const [active, setActive] = useState(initialIndex ?? 0);
   const [muted, setMuted] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const scrolledToInitial = useRef(false);
+
+  useEffect(() => {
+    if (scrolledToInitial.current) return;
+    if (!videos.length) return;
+    const target = initialIndex ?? 0;
+    const el = itemRefs.current[target];
+    if (el) {
+      el.scrollIntoView({ block: "start", behavior: "auto" });
+      scrolledToInitial.current = true;
+    }
+  }, [videos.length, initialIndex]);
 
   useEffect(() => {
     const obs = new IntersectionObserver(
