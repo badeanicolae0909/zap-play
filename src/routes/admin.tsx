@@ -160,9 +160,10 @@ function UploadTab() {
           upload.start();
         });
         finalVideoUrl = sig.embedUrl;
-        if (thumb) {
-          const tkey = `${creatorId}/${Date.now()}.${thumb.name.split(".").pop()}`;
-          await supabase.storage.from("thumbnails").upload(tkey, thumb, { contentType: thumb.type });
+        const thumbFile = thumb ?? (await extractVideoThumbnail(file));
+        if (thumbFile) {
+          const tkey = `${creatorId}/${Date.now()}.${(thumbFile.name.split(".").pop() ?? "jpg")}`;
+          await supabase.storage.from("thumbnails").upload(tkey, thumbFile, { contentType: thumbFile.type });
           finalThumbUrl = supabase.storage.from("thumbnails").getPublicUrl(tkey).data.publicUrl;
         }
       } else {
