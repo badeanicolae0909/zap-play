@@ -42,8 +42,15 @@ export function resolveVideoSource(rawUrl: string): VideoSource {
   }
   if (host === "player.vimeo.com") return { kind: "iframe", src: url };
 
-  // Bunny Stream — iframe embed (already includes autoplay params from server)
-  if (host === "iframe.mediadelivery.net") return { kind: "iframe", src: url };
+  // Bunny Stream — force autoplay+muted+loop regardless of stored URL flags
+  if (host === "iframe.mediadelivery.net") {
+    u.searchParams.set("autoplay", "true");
+    u.searchParams.set("muted", "true");
+    u.searchParams.set("loop", "true");
+    u.searchParams.set("preload", "true");
+    u.searchParams.set("responsive", "true");
+    return { kind: "iframe", src: u.toString() };
+  }
 
   // Streamable
   if (host === "streamable.com") {
