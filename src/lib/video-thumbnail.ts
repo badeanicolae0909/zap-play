@@ -1,5 +1,5 @@
 // Extract a thumbnail JPEG from a video File by seeking to ~1s and snapping a frame.
-export async function extractVideoThumbnail(file: File, seekTo = 1): Promise<File | null> {
+export async function extractVideoThumbnail(file: File, seekTo = 5): Promise<File | null> {
   return new Promise((resolve) => {
     try {
       const url = URL.createObjectURL(file);
