@@ -14,6 +14,7 @@ import { Upload, Trash2, Plus, Film, Users, Shield, Download, Loader2, Pencil } 
 import { scrapeBunkr, importBunkr } from "@/lib/bunkr.functions";
 import { createBunnyUpload } from "@/lib/bunny.functions";
 import * as tus from "tus-js-client";
+import { extractVideoThumbnail } from "@/lib/video-thumbnail";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/admin")({
