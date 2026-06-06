@@ -160,7 +160,7 @@ function UploadTab() {
           upload.start();
         });
         finalVideoUrl = sig.embedUrl;
-        const thumbFile = thumb ?? (await extractVideoThumbnail(file));
+        const thumbFile = thumb ?? (await extractVideoThumbnail(file, 5));
         if (thumbFile) {
           const tkey = `${creatorId}/${Date.now()}.${(thumbFile.name.split(".").pop() ?? "jpg")}`;
           await supabase.storage.from("thumbnails").upload(tkey, thumbFile, { contentType: thumbFile.type });
