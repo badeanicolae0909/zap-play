@@ -14,6 +14,7 @@ import { Upload, Trash2, Plus, Film, Users, Shield, Download, Loader2, Pencil } 
 import { scrapeBunkr, importBunkr } from "@/lib/bunkr.functions";
 import { createBunnyUpload } from "@/lib/bunny.functions";
 import * as tus from "tus-js-client";
+import { extractVideoThumbnail } from "@/lib/video-thumbnail";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/admin")({
@@ -130,9 +131,10 @@ function UploadTab() {
         if (upErr) throw upErr;
         setProgress(60);
         finalVideoUrl = supabase.storage.from("videos").getPublicUrl(key).data.publicUrl;
-        if (thumb) {
-          const tkey = `${creatorId}/${Date.now()}.${thumb.name.split(".").pop()}`;
-          await supabase.storage.from("thumbnails").upload(tkey, thumb, { contentType: thumb.type });
+        const thumbFile = thumb ?? (await extractVideoThumbnail(file));
+        if (thumbFile) {
+          const tkey = `${creatorId}/${Date.now()}.${(thumbFile.name.split(".").pop() ?? "jpg")}`;
+          await supabase.storage.from("thumbnails").upload(tkey, thumbFile, { contentType: thumbFile.type });
           finalThumbUrl = supabase.storage.from("thumbnails").getPublicUrl(tkey).data.publicUrl;
         }
       } else if (mode === "bunny") {
@@ -158,9 +160,10 @@ function UploadTab() {
           upload.start();
         });
         finalVideoUrl = sig.embedUrl;
-        if (thumb) {
-          const tkey = `${creatorId}/${Date.now()}.${thumb.name.split(".").pop()}`;
-          await supabase.storage.from("thumbnails").upload(tkey, thumb, { contentType: thumb.type });
+        const thumbFile = thumb ?? (await extractVideoThumbnail(file));
+        if (thumbFile) {
+          const tkey = `${creatorId}/${Date.now()}.${(thumbFile.name.split(".").pop() ?? "jpg")}`;
+          await supabase.storage.from("thumbnails").upload(tkey, thumbFile, { contentType: thumbFile.type });
           finalThumbUrl = supabase.storage.from("thumbnails").getPublicUrl(tkey).data.publicUrl;
         }
       } else {
