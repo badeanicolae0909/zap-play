@@ -97,28 +97,32 @@ function VideoTile({ video, onOpen }: { video: VideoRow; onOpen: () => void }) {
   }
 
   function onPointerDown(e: React.PointerEvent) {
+    // Ignore non-primary touches/clicks (multi-touch, right-click, etc.)
+    if (e.pointerType === "mouse" && e.button !== 0) return;
     moved.current = false;
     heldRef.current = false;
     startPos.current = { x: e.clientX, y: e.clientY };
     clearTimer();
     holdTimer.current = setTimeout(() => {
       holdTimer.current = null;
+      if (moved.current) return;
       heldRef.current = true;
       haptic("medium");
       setPreviewing(true);
-      // Try to start playback shortly after the element mounts.
       requestAnimationFrame(() => {
         const el = videoRef.current;
         if (el) { el.muted = true; el.play().catch(() => {}); }
       });
-    }, 350);
+    }, 500);
   }
 
   function onPointerMove(e: React.PointerEvent) {
     if (!startPos.current) return;
     const dx = Math.abs(e.clientX - startPos.current.x);
     const dy = Math.abs(e.clientY - startPos.current.y);
-    if (dx > 10 || dy > 10) {
+    // Any noticeable movement cancels the tap/long-press — vertical scrolling
+    // should never accidentally open a video.
+    if (dx > 6 || dy > 6) {
       moved.current = true;
       clearTimer();
       if (heldRef.current) { heldRef.current = false; endPreview(); }
@@ -137,6 +141,7 @@ function VideoTile({ video, onOpen }: { video: VideoRow; onOpen: () => void }) {
       haptic("light");
       onOpen();
     }
+    startPos.current = null;
   }
 
   return (
@@ -150,7 +155,7 @@ function VideoTile({ video, onOpen }: { video: VideoRow; onOpen: () => void }) {
       onPointerLeave={() => { if (heldRef.current) { heldRef.current = false; endPreview(); } clearTimer(); }}
       onContextMenu={(e) => e.preventDefault()}
       className={`tap-scale relative aspect-[9/16] overflow-hidden rounded-md bg-card select-none ${previewing ? "z-20 scale-[1.6] shadow-2xl ring-2 ring-primary" : ""} transition-transform duration-200`}
-      style={{ touchAction: "manipulation", WebkitTouchCallout: "none" }}
+      style={{ touchAction: "pan-y", WebkitTouchCallout: "none" }}
     >
       {video.thumbnail_url ? (
         <img src={video.thumbnail_url} className="pointer-events-none h-full w-full object-cover" alt="" draggable={false} />

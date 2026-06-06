@@ -48,12 +48,15 @@ function VideoPage() {
     enabled: !!user,
   });
 
-  // Put the tapped video first, then the rest of the creator's videos.
-  const ordered = useMemo<FeedVideo[]>(() => {
-    if (!data?.target) return [];
-    const rest = data.list.filter((v) => v.id !== data.target!.id);
-    return [data.target, ...rest];
+  // Keep the creator's chronological order; start the feed at the tapped video
+  // so the user can scroll up to the next (newer) or down to the previous (older).
+  const initialIndex = useMemo(() => {
+    if (!data?.target) return 0;
+    const idx = data.list.findIndex((v) => v.id === data.target!.id);
+    return idx < 0 ? 0 : idx;
   }, [data]);
+
+  const ordered = useMemo<FeedVideo[]>(() => (data?.list ?? []) as FeedVideo[], [data]);
 
   return (
     <main className="fixed inset-0 bg-background">
@@ -72,6 +75,7 @@ function VideoPage() {
         savedSet={inter?.saved}
         loading={isLoading}
         emptyText="Video not found."
+        initialIndex={initialIndex}
       />
     </main>
   );
