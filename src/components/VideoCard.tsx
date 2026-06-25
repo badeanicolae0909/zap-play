@@ -14,9 +14,8 @@ import { haptic, hapticSuccess } from "@/lib/telegram";
 import { toast } from "sonner";
 import { resolveVideoSource } from "@/lib/video-source";
 import { resolveBunkr } from "@/lib/bunkr.functions";
-
-// Module-level cache of resolved bunkr signed URLs keyed by page URL.
-const bunkrCache = new Map<string, { src: string; type: string; thumbnail: string | null; expiresAt: number }>();
+import { bunkrCache } from "@/lib/bunkr-cache";
+import type { VideoPool, SlotState } from "@/lib/video-pool";
 
 export type FeedVideo = {
   id: string;
@@ -32,6 +31,7 @@ export type FeedVideo = {
     display_name: string;
     avatar_url: string | null;
   } | null;
+  _resolvedSrc?: string | null;
 };
 
 type Props = {
@@ -39,38 +39,69 @@ type Props = {
   active: boolean;
   muted: boolean;
   onToggleMute: () => void;
+  pool: VideoPool;
+  poolSlot: number;
+  state: SlotState;
   initialLiked?: boolean;
   initialSaved?: boolean;
-  preload?: "auto" | "metadata" | "none";
 };
 
-export function VideoCard({ video, active, muted, onToggleMute, initialLiked, initialSaved, preload = "metadata" }: Props) {
+export function VideoCard({
+  video, active, muted, onToggleMute,
+  pool, poolSlot, state,
+  initialLiked, initialSaved,
+}: Props) {
   const source = useMemo(() => resolveVideoSource(video.video_url), [video.video_url]);
   const isEmbed = source.kind === "iframe";
   const needsResolve = source.kind === "bunkr";
-  const [resolvedSrc, setResolvedSrc] = useState<string | null>(needsResolve ? null : source.src);
 
-  // Resolve bunkr page URLs to signed mp4 (cached briefly until expiry).
+  const [resolvedSrc, setResolvedSrc] = useState<string | null>(() => {
+    if (video._resolvedSrc) return video._resolvedSrc;
+    return needsResolve ? null : source.src;
+  });
+
   useEffect(() => {
     if (!needsResolve) { setResolvedSrc(source.src); return; }
-    if (preload === "none") return;
+    if (video._resolvedSrc) { setResolvedSrc(video._resolvedSrc); return; }
     let alive = true;
     const cached = bunkrCache.get(source.src);
     if (cached && cached.expiresAt * 1000 > Date.now() + 30_000) {
       setResolvedSrc(cached.src);
       return;
     }
-    resolveBunkr({ data: { pageUrl: source.src } })
-      .then((res) => {
-        bunkrCache.set(source.src, res);
-        if (alive) setResolvedSrc(res.src);
-      })
-      .catch(() => {});
+    if (active) {
+      resolveBunkr({ data: { pageUrl: source.src } })
+        .then((res) => {
+          bunkrCache.set(source.src, res);
+          if (alive) setResolvedSrc(res.src);
+        })
+        .catch(() => {});
+    }
     return () => { alive = false; };
-  }, [source, needsResolve, preload]);
-  const ref = useRef<HTMLVideoElement>(null);
-  const [paused, setPaused] = useState(false);
+  }, [source, needsResolve, active, video._resolvedSrc]);
+
+  const mountRef = useRef<HTMLDivElement>(null);
+  const [videoMounted, setVideoMounted] = useState(false);
+
+  useEffect(() => {
+    const el = mountRef.current;
+    if (!el) return;
+    if (active && resolvedSrc && !isEmbed) {
+      pool.assign(poolSlot, 0, video.id, resolvedSrc, video.thumbnail_url);
+      pool.moveToContainer(poolSlot, el);
+      setVideoMounted(true);
+      pool.play(poolSlot);
+    }
+    return () => {
+      if (!active) {
+        pool.pause(poolSlot);
+        setVideoMounted(false);
+      }
+    };
+  }, [active, resolvedSrc, isEmbed, video.id, video.thumbnail_url, pool, poolSlot]);
+
   const [progress, setProgress] = useState(0);
+  const [paused, setPaused] = useState(false);
   const [liked, setLiked] = useState(!!initialLiked);
   const [saved, setSaved] = useState(!!initialSaved);
   const [likeBurst, setLikeBurst] = useState(0);
@@ -96,6 +127,17 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
   const pointerStart = useRef<{ x: number; y: number; t: number } | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  useEffect(() => {
+    if (!active || !videoMounted) return;
+    const tick = () => {
+      const el = pool.slots[poolSlot].el;
+      if (scrubbing || isSeekingRef.current || !el.duration) return;
+      setProgress((el.currentTime / el.duration) * 100);
+    };
+    const id = setInterval(tick, 250);
+    return () => clearInterval(id);
+  }, [active, videoMounted, pool, poolSlot, scrubbing]);
+
   function showControls() {
     setControlsVisible(true);
     if (hideTimer.current) clearTimeout(hideTimer.current);
@@ -118,22 +160,25 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
           if (error) console.warn("view insert failed", error);
         });
     }
-    const v = ref.current;
-    if (!v) return;
-    if (active) {
-      v.currentTime = 0;
-      v.play().catch(() => {});
-      setPaused(false);
-    } else {
-      v.pause();
-    }
   }, [active, video.id, user?.id]);
 
+  useEffect(() => {
+    if (!active || !videoMounted) return;
+    const el = pool.slots[poolSlot].el;
+    const onPlay = () => setPaused(false);
+    const onPause = () => setPaused(true);
+    el.addEventListener("play", onPlay);
+    el.addEventListener("pause", onPause);
+    return () => {
+      el.removeEventListener("play", onPlay);
+      el.removeEventListener("pause", onPause);
+    };
+  }, [active, videoMounted, pool, poolSlot]);
+
   function togglePlay() {
-    const v = ref.current;
-    if (!v) return;
     haptic("light");
-    if (v.paused) { v.play(); setPaused(false); } else { v.pause(); setPaused(true); }
+    const el = pool.slots[poolSlot].el;
+    if (el.paused) { pool.play(poolSlot); } else { pool.pause(poolSlot); }
   }
 
   async function toggleLike() {
@@ -190,30 +235,23 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
     qc.invalidateQueries({ queryKey: ["admin-videos"] });
   }
 
-
-  function handleDoubleTap() {
-    if (!liked) toggleLike();
-    setLikeBurst((n) => n + 1);
-  }
-
-  // ---- Hold-to-seek on left/right side of video ----
+  // ---- Hold-to-seek ----
   function startSeek(dir: 1 | -1) {
-    const v = ref.current;
-    if (!v) return;
+    const el = pool.slots[poolSlot].el;
+    if (!el) return;
     isSeekingRef.current = true;
     seekDir.current = dir;
     seekStartTime.current = performance.now();
     haptic("medium");
     const tick = () => {
-      if (!isSeekingRef.current || !ref.current) return;
-      const v2 = ref.current;
+      if (!isSeekingRef.current) return;
+      const v = pool.slots[poolSlot].el;
       const elapsed = (performance.now() - seekStartTime.current) / 1000;
-      // Speed ramps from 2x up to 10x over ~4s of holding
       const speed = Math.min(2 + elapsed * 2, 10);
       const delta = (1 / 60) * speed * dir;
-      const dur = v2.duration || 0;
-      v2.currentTime = Math.max(0, Math.min(dur, v2.currentTime + delta));
-      if (dur) setProgress((v2.currentTime / dur) * 100);
+      const dur = v.duration || 0;
+      v.currentTime = Math.max(0, Math.min(dur, v.currentTime + delta));
+      if (dur) setProgress((v.currentTime / dur) * 100);
       setSeekIndicator({ dir, speed });
       seekRAF.current = requestAnimationFrame(tick);
     };
@@ -227,38 +265,33 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
     setSeekIndicator(null);
   }
 
-  function onVideoPointerDown(e: React.PointerEvent<HTMLVideoElement>) {
+  function onOverlayPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const dir: 1 | -1 = x < rect.width / 2 ? -1 : 1;
     pointerStart.current = { x: e.clientX, y: e.clientY, t: Date.now() };
-    // Longer hold threshold so quick swipes never trigger seek
     holdTimer.current = setTimeout(() => {
       holdTimer.current = null;
       startSeek(dir);
     }, 450);
   }
 
-  function onVideoPointerMove(e: React.PointerEvent<HTMLVideoElement>) {
+  function onOverlayPointerMove(e: React.PointerEvent<HTMLDivElement>) {
     const start = pointerStart.current;
     if (!start || isSeekingRef.current) return;
     const dx = Math.abs(e.clientX - start.x);
     const dy = Math.abs(e.clientY - start.y);
-    // Any meaningful movement = user is scrolling/swiping. Abort hold so the
-    // native scroll takes over without delay.
     if (dx > 8 || dy > 8) {
       if (holdTimer.current) { clearTimeout(holdTimer.current); holdTimer.current = null; }
       pointerStart.current = null;
     }
   }
 
-  function onVideoPointerUp() {
+  function onOverlayPointerUp() {
     const wasHold = !!holdTimer.current;
     if (holdTimer.current) { clearTimeout(holdTimer.current); holdTimer.current = null; }
     if (isSeekingRef.current) { stopSeek(); pointerStart.current = null; return; }
     if (!wasHold) { pointerStart.current = null; return; }
-
-    // Tap: show controls. Double-tap toggles play/pause.
     const now = Date.now();
     if (now - lastTapRef.current < 320) {
       lastTapRef.current = 0;
@@ -270,7 +303,7 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
     pointerStart.current = null;
   }
 
-  function onVideoPointerCancel() {
+  function onOverlayPointerCancel() {
     if (holdTimer.current) { clearTimeout(holdTimer.current); holdTimer.current = null; }
     if (isSeekingRef.current) stopSeek();
     pointerStart.current = null;
@@ -279,8 +312,8 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
   // ---- Draggable progress bar ----
   function seekFromClientX(clientX: number) {
     const el = progressRef.current;
-    const v = ref.current;
-    if (!el || !v || !v.duration) return;
+    const v = pool.slots[poolSlot].el;
+    if (!el || !v.duration) return;
     const rect = el.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     v.currentTime = pct * v.duration;
@@ -291,8 +324,7 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
     e.stopPropagation();
     setScrubbing(true);
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    const v = ref.current;
-    if (v && !v.paused) v.pause();
+    pool.pause(poolSlot);
     haptic("light");
     seekFromClientX(e.clientX);
   }
@@ -307,91 +339,76 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
     if (!scrubbing) return;
     e.stopPropagation();
     setScrubbing(false);
-    const v = ref.current;
-    if (v && active && !paused) v.play().catch(() => {});
+    if (active && !paused) pool.play(poolSlot);
   }
+
+  const showLoading = (!isEmbed && state === "loading" && !resolvedSrc);
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-black">
-      {isEmbed ? (
+      {/* Mount point for pool video element */}
+      <div ref={mountRef} className="absolute inset-0" />
+
+      {/* Iframe embeds */}
+      {isEmbed && active && (
+        <iframe
+          key={source.src}
+          src={source.src}
+          title={video.caption ?? "video"}
+          allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+          allowFullScreen
+          referrerPolicy="no-referrer"
+          className="absolute inset-0 h-full w-full border-0 pointer-events-none"
+        />
+      )}
+
+      {/* Gesture overlay — captures pointer events for seek/tap */}
+      {!isEmbed && videoMounted && (
+        <div
+          className="absolute inset-0 z-10"
+          style={{ touchAction: "pan-y" }}
+          onPointerDown={onOverlayPointerDown}
+          onPointerMove={onOverlayPointerMove}
+          onPointerUp={onOverlayPointerUp}
+          onPointerCancel={onOverlayPointerCancel}
+          onPointerLeave={onOverlayPointerCancel}
+        />
+      )}
+
+      {/* Loading */}
+      {showLoading && (
         <>
           {video.thumbnail_url && (
             <img src={video.thumbnail_url} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" />
           )}
-          {active ? (
-            <iframe
-              key={source.src}
-              src={source.src}
-              title={video.caption ?? "video"}
-              allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-              allowFullScreen
-              referrerPolicy="no-referrer"
-              // pointer-events disabled so vertical swipes reach the snap
-              // container instead of being swallowed by the embed.
-              className="absolute inset-0 h-full w-full border-0 pointer-events-none"
-            />
-          ) : null}
-        </>
-      ) : (
-        <>
-          {resolvedSrc ? (
-            <video
-              ref={ref}
-              src={resolvedSrc}
-              poster={video.thumbnail_url ?? undefined}
-              loop
-              muted={muted}
-              playsInline
-              preload={preload}
-
-              className="absolute inset-0 h-full w-full object-cover"
-              style={{ touchAction: "pan-y" }}
-              onPointerDown={onVideoPointerDown}
-              onPointerMove={onVideoPointerMove}
-              onPointerUp={onVideoPointerUp}
-              onPointerCancel={onVideoPointerCancel}
-              onPointerLeave={onVideoPointerCancel}
-              onTimeUpdate={(e) => {
-                if (scrubbing || isSeekingRef.current) return;
-                const t = e.currentTarget;
-                if (t.duration) setProgress((t.currentTime / t.duration) * 100);
-              }}
-            />
-          ) : (
-            <>
-              {video.thumbnail_url && (
-                <img src={video.thumbnail_url} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" />
-              )}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Loader2 className="h-7 w-7 animate-spin text-foreground/70" />
-              </div>
-            </>
-          )}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Loader2 className="h-7 w-7 animate-spin text-foreground/70" />
+          </div>
         </>
       )}
 
       {/* Gradients */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-32 gradient-overlay-top" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-64 gradient-overlay" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-32 gradient-overlay-top z-20" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-64 gradient-overlay z-20" />
 
       {/* Paused indicator */}
       <AnimatePresence>
         {paused && !scrubbing && !seekIndicator && (
           <motion.div
             initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.6 }}
-            className="pointer-events-none absolute inset-0 flex items-center justify-center"
+            className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center"
           >
             <div className="glass-strong rounded-full p-5"><Play className="h-10 w-10 fill-foreground" /></div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Seek indicator (fast-forward / rewind) */}
+      {/* Seek indicator */}
       <AnimatePresence>
         {seekIndicator && (
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}
-            className={`pointer-events-none absolute inset-y-0 ${seekIndicator.dir === 1 ? "right-0" : "left-0"} flex w-1/2 items-center justify-center`}
+            className={`pointer-events-none absolute inset-y-0 z-30 ${seekIndicator.dir === 1 ? "right-0" : "left-0"} flex w-1/2 items-center justify-center`}
           >
             <div className="glass-strong flex items-center gap-2 rounded-full px-5 py-3">
               {seekIndicator.dir === 1 ? <FastForward className="h-6 w-6 fill-foreground" /> : <Rewind className="h-6 w-6 fill-foreground" />}
@@ -410,26 +427,25 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
             animate={{ opacity: [0, 1, 1, 0], scale: [0.4, 1.4, 1.2, 1.6] }}
             transition={{ duration: 0.9 }}
             onAnimationComplete={() => setLikeBurst(0)}
-            className="pointer-events-none absolute inset-0 flex items-center justify-center"
+            className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center"
           >
             <Heart className="h-32 w-32 fill-primary text-primary drop-shadow-[0_0_30px_rgba(255,100,200,0.6)]" />
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Mute toggle — only meaningful for native <video> */}
+      {/* Mute toggle */}
       {!isEmbed && (
         <button
           onClick={(e) => { e.stopPropagation(); onToggleMute(); haptic("light"); }}
-          className={`tap-scale absolute right-3 top-3 z-20 glass rounded-full p-2.5 transition-opacity duration-300 ${controlsVisible || paused ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+          className={`tap-scale absolute right-3 top-3 z-40 glass rounded-full p-2.5 transition-opacity duration-300 ${controlsVisible || paused ? "opacity-100" : "opacity-0 pointer-events-none"}`}
         >
           {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
         </button>
       )}
 
       {/* Right action rail */}
-      <div className={`absolute bottom-40 right-3 z-20 flex flex-col items-center gap-5 transition-opacity duration-300 ${controlsVisible || paused ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
-
+      <div className={`absolute bottom-40 right-3 z-40 flex flex-col items-center gap-5 transition-opacity duration-300 ${controlsVisible || paused ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
         {video.creator && (
           <Link to="/creator/$username" params={{ username: video.creator.username }} className="tap-scale relative">
             <div className="h-12 w-12 overflow-hidden rounded-full border-2 border-foreground gradient-primary">
@@ -474,10 +490,8 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
         </AlertDialog>
       )}
 
-
       {/* Bottom info */}
-      <div className={`absolute inset-x-0 bottom-28 z-10 px-4 transition-opacity duration-300 ${controlsVisible || paused ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
-
+      <div className={`absolute inset-x-0 bottom-28 z-40 px-4 transition-opacity duration-300 ${controlsVisible || paused ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
         {video.creator && (
           <Link to="/creator/$username" params={{ username: video.creator.username }} className="inline-flex items-center gap-2">
             <span className="text-base font-bold tracking-tight">@{video.creator.username}</span>
@@ -499,8 +513,7 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
         )}
       </div>
 
-      {/* Draggable progress / scrub bar — sits above the bottom nav */}
-      {/* Draggable progress / scrub bar — only for native <video> (iframes don't expose time) */}
+      {/* Progress bar */}
       {!isEmbed && (
         <div
           ref={progressRef}
@@ -508,13 +521,10 @@ export function VideoCard({ video, active, muted, onToggleMute, initialLiked, in
           onPointerMove={onScrubMove}
           onPointerUp={onScrubUp}
           onPointerCancel={onScrubUp}
-          className={`absolute inset-x-0 bottom-[92px] z-30 flex h-6 touch-none items-center px-3 transition-opacity duration-300 ${controlsVisible || paused || scrubbing ? "opacity-100" : "opacity-0"}`}
+          className={`absolute inset-x-0 bottom-[92px] z-40 flex h-6 touch-none items-center px-3 transition-opacity duration-300 ${controlsVisible || paused || scrubbing ? "opacity-100" : "opacity-0"}`}
         >
           <div className={`relative w-full overflow-visible rounded-full bg-foreground/15 transition-all ${scrubbing ? "h-1.5" : "h-0.5"}`}>
-            <div
-              className="h-full rounded-full bg-foreground/90 transition-[width] duration-100"
-              style={{ width: `${progress}%` }}
-            />
+            <div className="h-full rounded-full bg-foreground/90 transition-[width] duration-100" style={{ width: `${progress}%` }} />
             <div
               className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground shadow-lg transition-all ${scrubbing ? "h-4 w-4 opacity-100" : "h-2.5 w-2.5 opacity-0"}`}
               style={{ left: `${progress}%` }}

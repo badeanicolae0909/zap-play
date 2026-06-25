@@ -20,10 +20,10 @@ function Saved() {
       if (!user) return [];
       const { data: favs } = await supabase
         .from("favorites")
-        .select("video:videos(id, video_url, thumbnail_url, caption, tags, like_count, view_count, creator:creators(id, username, display_name, avatar_url))")
+        .select("video:videos(id, video_url, thumbnail_url, caption, tags, like_count, view_count, is_active, creator:creators(id, username, display_name, avatar_url))")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
-      return (favs ?? []).map((f) => f.video).filter(Boolean) as unknown as FeedVideo[];
+      return (favs ?? []).map((f) => f.video).filter((v) => v && v.is_active) as unknown as FeedVideo[];
     },
     enabled: !!user,
   });

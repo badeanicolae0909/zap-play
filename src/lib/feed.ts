@@ -1,5 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { FeedVideo } from "@/components/VideoCard";
+import { resolveVideoSource } from "./video-source";
+import { resolveBunkr } from "./bunkr.functions";
+import { bunkrCache } from "./bunkr-cache";
 
 // Direct media (mp4/webm/etc.) or Supabase-storage hosted videos load instantly.
 // External links (bunkr/turbo/iframe) need a server resolve round-trip, so we
@@ -21,12 +24,11 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 export async function fetchFeed(limit = 30, creatorId?: string): Promise<FeedVideo[]> {
-  // Pull a wider pool so we have room to interleave + randomize per visit.
-  // Pull a much wider pool so every creator gets representation in the mix.
   const pool = creatorId ? limit : 500;
   let q = supabase
     .from("videos")
     .select("id, video_url, thumbnail_url, caption, tags, like_count, view_count, creator:creators(id, username, display_name, avatar_url)")
+    .eq("is_active", true)
     .order("created_at", { ascending: false })
     .limit(pool);
   if (creatorId) q = q.eq("creator_id", creatorId);
@@ -38,8 +40,7 @@ export async function fetchFeed(limit = 30, creatorId?: string): Promise<FeedVid
   if (creatorId) return all.slice(0, limit);
 
   // Group by creator, shuffle each group, then round-robin so every creator
-  // gets a turn before any creator gets a second video. This guarantees
-  // diversity across the visible feed instead of bunching one creator together.
+  // gets a turn before any creator gets a second video.
   const byCreator = new Map<string, FeedVideo[]>();
   for (const v of all) {
     const key = v.creator?.id ?? "_none";
@@ -52,8 +53,6 @@ export async function fetchFeed(limit = 30, creatorId?: string): Promise<FeedVid
   let lastCreator: string | null = null;
   let firstPass = true;
   while (out.length < limit && buckets.some((b) => b.length)) {
-    // First pass: prioritize direct uploads so the very first card plays
-    // instantly. After that, just round-robin in shuffled order.
     const order = buckets
       .map((b, i) => ({ b, i }))
       .filter((x) => x.b.length > 0)
@@ -66,7 +65,6 @@ export async function fetchFeed(limit = 30, creatorId?: string): Promise<FeedVid
     for (const { b } of order) {
       if (out.length >= limit) break;
       const cid = b[0].creator?.id ?? "_none";
-      // Avoid same creator twice in a row when alternatives still exist.
       if (cid === lastCreator && order.some((o) => (o.b[0].creator?.id ?? "_none") !== lastCreator)) continue;
       const next = b.shift()!;
       out.push(next);
@@ -86,4 +84,29 @@ export async function fetchUserInteractions(userId: string) {
     liked: new Set((likes ?? []).map((l) => l.video_id)),
     saved: new Set((favs ?? []).map((f) => f.video_id)),
   };
+}
+
+/**
+ * Pre-resolve Bunkr page URLs for the first `count` videos so the pool never
+ * shows a loading spinner for the initially visible window.
+ * Modifies videos in-place with _resolvedSrc.
+ */
+export async function preResolveBunkr(videos: FeedVideo[], count: number): Promise<void> {
+  const toResolve = videos.slice(0, count).filter((v) => {
+    const src = resolveVideoSource(v.video_url);
+    return src.kind === "bunkr";
+  });
+  if (!toResolve.length) return;
+
+  await Promise.allSettled(
+    toResolve.map(async (v) => {
+      try {
+        const res = await resolveBunkr({ data: { pageUrl: v.video_url } });
+        bunkrCache.set(v.video_url, res);
+        v._resolvedSrc = res.src;
+      } catch {
+        v._resolvedSrc = null;
+      }
+    })
+  );
 }

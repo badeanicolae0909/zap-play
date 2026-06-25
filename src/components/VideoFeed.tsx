@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { VideoCard, type FeedVideo } from "@/components/VideoCard";
 import { Loader2 } from "lucide-react";
+import { getVideoPool, type SlotState } from "@/lib/video-pool";
 
 type Props = {
   videos: FeedVideo[];
@@ -11,13 +12,21 @@ type Props = {
   initialIndex?: number;
 };
 
+const WINDOW_SIZE = 1; // active ± 1 → 3 cards total
+
+function isInWindow(i: number, active: number): boolean {
+  return Math.abs(i - active) <= WINDOW_SIZE;
+}
+
 export function VideoFeed({ videos, likedSet, savedSet, loading, emptyText, initialIndex }: Props) {
   const [active, setActive] = useState(initialIndex ?? 0);
   const [muted, setMuted] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const scrolledToInitial = useRef(false);
+  const pool = useRef(getVideoPool()).current;
 
+  // Scroll to initialIndex on first load
   useEffect(() => {
     if (scrolledToInitial.current) return;
     if (!videos.length) return;
@@ -29,6 +38,7 @@ export function VideoFeed({ videos, likedSet, savedSet, loading, emptyText, init
     }
   }, [videos.length, initialIndex]);
 
+  // IntersectionObserver to track which snap item is most visible
   useEffect(() => {
     const obs = new IntersectionObserver(
       (entries) => {
@@ -44,6 +54,17 @@ export function VideoFeed({ videos, likedSet, savedSet, loading, emptyText, init
     itemRefs.current.forEach((el) => el && obs.observe(el));
     return () => obs.disconnect();
   }, [videos.length]);
+
+  // Sync muted state to all pool slots
+  useEffect(() => {
+    pool.setMuted(muted);
+  }, [muted, pool]);
+
+  // Assign pool slot by video index (round-robin via modulo)
+  const poolSlotFor = useCallback(
+    (videoIndex: number): number => videoIndex % 3,
+    []
+  );
 
   if (loading) {
     return (
@@ -64,10 +85,12 @@ export function VideoFeed({ videos, likedSet, savedSet, loading, emptyText, init
   return (
     <div ref={containerRef} className="snap-feed no-scrollbar h-full w-full overflow-y-scroll">
       {videos.map((v, i) => {
-        const distance = Math.abs(i - active);
-        // Buffer current + next 2 fully; just metadata for the rest
-        const preload: "auto" | "metadata" | "none" =
-          distance === 0 ? "auto" : distance <= 2 ? "auto" : distance <= 4 ? "metadata" : "none";
+        const inWindow = isInWindow(i, active);
+        const slot = poolSlotFor(i);
+        const isActive = i === active;
+        const slotState: SlotState =
+          pool.slots[slot].videoId === v.id ? pool.slots[slot].state : "idle";
+
         return (
           <div
             key={v.id}
@@ -75,18 +98,34 @@ export function VideoFeed({ videos, likedSet, savedSet, loading, emptyText, init
             data-idx={i}
             className="snap-item relative h-full w-full"
           >
-            <VideoCard
-              video={v}
-              active={i === active}
-              muted={muted}
-              onToggleMute={() => setMuted((m) => !m)}
-              initialLiked={likedSet?.has(v.id)}
-              initialSaved={savedSet?.has(v.id)}
-              preload={preload}
-            />
+            {inWindow ? (
+              <VideoCard
+                video={v}
+                active={isActive}
+                muted={muted}
+                onToggleMute={() => setMuted((m) => !m)}
+                pool={pool}
+                poolSlot={slot}
+                state={slotState}
+                initialLiked={likedSet?.has(v.id)}
+                initialSaved={savedSet?.has(v.id)}
+              />
+            ) : (
+              <Placeholder thumbnail={v.thumbnail_url} />
+            )}
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function Placeholder({ thumbnail }: { thumbnail: string | null }) {
+  return (
+    <div className="h-full w-full bg-black">
+      {thumbnail && (
+        <img src={thumbnail} alt="" className="h-full w-full object-cover opacity-40" />
+      )}
     </div>
   );
 }

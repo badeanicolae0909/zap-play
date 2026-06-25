@@ -24,7 +24,7 @@ function CreatorPage() {
     queryFn: async () => {
       const { data: c } = await supabase.from("creators").select("*").eq("username", username).maybeSingle();
       if (!c) return null;
-      const { data: v } = await supabase.from("videos").select("id, thumbnail_url, video_url, view_count").eq("creator_id", c.id).order("created_at", { ascending: false });
+      const { data: v } = await supabase.from("videos").select("id, thumbnail_url, video_url, view_count").eq("creator_id", c.id).eq("is_active", true).order("created_at", { ascending: false });
       return { creator: c, videos: (v ?? []) as VideoRow[] };
     },
   });

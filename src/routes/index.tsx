@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { VideoFeed } from "@/components/VideoFeed";
 import { BottomNav } from "@/components/BottomNav";
-import { fetchFeed, fetchUserInteractions } from "@/lib/feed";
+import { fetchFeed, fetchUserInteractions, preResolveBunkr } from "@/lib/feed";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/")({ component: Index });
@@ -11,7 +11,12 @@ function Index() {
   const { user } = useAuth();
   const { data: videos, isLoading } = useQuery({
     queryKey: ["feed"],
-    queryFn: () => fetchFeed(200),
+    queryFn: async () => {
+      const feed = await fetchFeed(200);
+      // Pre-resolve bunkr URLs for visible window so the pool starts instantly
+      await preResolveBunkr(feed, 5);
+      return feed;
+    },
     staleTime: 0,
     gcTime: 0,
     refetchOnMount: "always",

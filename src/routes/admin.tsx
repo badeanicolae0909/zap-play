@@ -404,6 +404,7 @@ type AdminVideoRow = {
   video_url: string;
   thumbnail_url: string | null;
   creator_id: string;
+  is_active: boolean;
   is_featured: boolean;
   tags: string[] | null;
   creator?: { display_name: string } | null;
@@ -413,7 +414,7 @@ function VideosTab({ initialEditId }: { initialEditId?: string }) {
   const qc = useQueryClient();
   const { data } = useQuery({
     queryKey: ["admin-videos"],
-    queryFn: async () => ((await supabase.from("videos").select("id, caption, view_count, like_count, video_url, thumbnail_url, creator_id, is_featured, tags, creator:creators(display_name)").order("created_at", { ascending: false })).data ?? []) as AdminVideoRow[],
+    queryFn: async () => ((await supabase.from("videos").select("id, caption, view_count, like_count, video_url, thumbnail_url, creator_id, is_active, is_featured, tags, creator:creators(display_name)").order("created_at", { ascending: false })).data ?? []) as AdminVideoRow[],
   });
   const { data: creators } = useQuery({
     queryKey: ["creators"],
@@ -440,7 +441,10 @@ function VideosTab({ initialEditId }: { initialEditId?: string }) {
             {v.thumbnail_url ? <img src={v.thumbnail_url} className="h-full w-full object-cover" alt="" /> : <video src={v.video_url} className="h-full w-full object-cover" muted />}
           </button>
           <button onClick={() => setEditing(v)} className="min-w-0 flex-1 space-y-1 text-left">
-            <p className="truncate text-sm font-medium">{v.caption || "Untitled"}</p>
+            <div className="flex items-center gap-2">
+              <p className="truncate text-sm font-medium">{v.caption || "Untitled"}</p>
+              {!v.is_active && <span className="shrink-0 rounded-full bg-destructive/10 px-1.5 py-0.5 text-[9px] font-medium text-destructive">Hidden</span>}
+            </div>
             <p className="truncate text-xs text-muted-foreground">@{v.creator?.display_name ?? "—"} · {v.view_count} views · {v.like_count} likes</p>
             <p className="truncate text-[10px] text-muted-foreground/70">{v.video_url}</p>
           </button>
@@ -455,7 +459,7 @@ function VideosTab({ initialEditId }: { initialEditId?: string }) {
 
 function EditVideoDialog({ video, creators, onClose }: { video: AdminVideoRow | null; creators: Array<{ id: string; display_name: string; username: string }>; onClose: () => void }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ caption: "", tags: "", video_url: "", thumbnail_url: "", creator_id: "", is_featured: false });
+  const [form, setForm] = useState({ caption: "", tags: "", video_url: "", thumbnail_url: "", creator_id: "", is_active: true, is_featured: false });
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [thumbFile, setThumbFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -469,6 +473,7 @@ function EditVideoDialog({ video, creators, onClose }: { video: AdminVideoRow | 
       video_url: video.video_url,
       thumbnail_url: video.thumbnail_url ?? "",
       creator_id: video.creator_id,
+      is_active: video.is_active,
       is_featured: video.is_featured,
     });
     setVideoFile(null);
@@ -501,6 +506,7 @@ function EditVideoDialog({ video, creators, onClose }: { video: AdminVideoRow | 
         video_url: finalVideoUrl,
         thumbnail_url: finalThumbUrl || null,
         creator_id: form.creator_id,
+        is_active: form.is_active,
         is_featured: form.is_featured,
       }).eq("id", video.id);
       if (error) throw error;
@@ -552,6 +558,10 @@ function EditVideoDialog({ video, creators, onClose }: { video: AdminVideoRow | 
           <label className="flex items-center gap-2 text-sm text-muted-foreground">
             <input type="checkbox" checked={form.is_featured} onChange={(e) => setForm({ ...form, is_featured: e.target.checked })} className="h-4 w-4 rounded" />
             Featured
+          </label>
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} className="h-4 w-4 rounded" />
+            Active (visible in feed)
           </label>
           <p className="text-[10px] text-muted-foreground">Stats: {video?.view_count ?? 0} views · {video?.like_count ?? 0} likes</p>
         </div>

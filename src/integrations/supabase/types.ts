@@ -220,6 +220,7 @@ export type Database = {
           creator_id: string
           duration_seconds: number | null
           id: string
+          is_active: boolean
           is_featured: boolean
           like_count: number
           tags: string[] | null
@@ -234,6 +235,7 @@ export type Database = {
           creator_id: string
           duration_seconds?: number | null
           id?: string
+          is_active?: boolean
           is_featured?: boolean
           like_count?: number
           tags?: string[] | null
@@ -248,6 +250,7 @@ export type Database = {
           creator_id?: string
           duration_seconds?: number | null
           id?: string
+          is_active?: boolean
           is_featured?: boolean
           like_count?: number
           tags?: string[] | null

@@ -24,6 +24,7 @@ function VideoPage() {
         .from("videos")
         .select("id, video_url, thumbnail_url, caption, tags, like_count, view_count, creator_id, creator:creators(id, username, display_name, avatar_url)")
         .eq("id", id)
+        .eq("is_active", true)
         .maybeSingle();
       if (e1) throw e1;
       if (!target) return { target: null as FeedVideo | null, list: [] as FeedVideo[] };
@@ -32,6 +33,7 @@ function VideoPage() {
         .from("videos")
         .select("id, video_url, thumbnail_url, caption, tags, like_count, view_count, creator:creators(id, username, display_name, avatar_url)")
         .eq("creator_id", (target as { creator_id: string }).creator_id)
+        .eq("is_active", true)
         .order("created_at", { ascending: false });
       if (e2) throw e2;
 
