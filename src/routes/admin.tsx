@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/lib/auth";
@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Upload, Trash2, Plus, Film, Users, Shield, Download, Loader2, Pencil } from "lucide-react";
+import { Upload, Trash2, Plus, Film, Users, Shield, Download, Loader2, Pencil, Search, Copy, Check } from "lucide-react";
+import { CreatorPicker } from "@/components/CreatorPicker";
 import { scrapeBunkr, importBunkr } from "@/lib/bunkr.functions";
 import { createBunnyUpload } from "@/lib/bunny.functions";
 import * as tus from "tus-js-client";
@@ -207,12 +208,7 @@ function UploadTab() {
 
       <div className="space-y-1.5">
         <Label>Creator</Label>
-        <Select value={creatorId} onValueChange={setCreatorId}>
-          <SelectTrigger className="h-12 rounded-xl glass"><SelectValue placeholder="Choose creator" /></SelectTrigger>
-          <SelectContent>
-            {creators?.map((c) => <SelectItem key={c.id} value={c.id}>{c.display_name} (@{c.username})</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <CreatorPicker creators={creators ?? []} value={creatorId} onChange={setCreatorId} />
       </div>
 
       {mode === "file" ? (
@@ -338,12 +334,7 @@ function BunkrImport({ creators }: { creators: Array<{ id: string; display_name:
         <>
           <div className="space-y-1.5">
             <Label>Creator to attribute videos</Label>
-            <Select value={creatorId} onValueChange={setCreatorId}>
-              <SelectTrigger className="h-11 rounded-xl glass"><SelectValue placeholder="Choose creator" /></SelectTrigger>
-              <SelectContent>
-                {creators.map((c) => <SelectItem key={c.id} value={c.id}>{c.display_name} (@{c.username})</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <CreatorPicker creators={creators} value={creatorId} onChange={setCreatorId} />
           </div>
 
           <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -422,10 +413,25 @@ function VideosTab({ initialEditId }: { initialEditId?: string }) {
   });
   const [editing, setEditing] = useState<AdminVideoRow | null>(null);
   const [autoOpened, setAutoOpened] = useState<string | null>(null);
+  const [videoSearch, setVideoSearch] = useState("");
+
   if (initialEditId && data && autoOpened !== initialEditId) {
     const found = data.find((v) => v.id === initialEditId);
     if (found) { setAutoOpened(initialEditId); setEditing(found); }
   }
+
+  const filteredVideos = useMemo(() => {
+    if (!data) return [];
+    if (!videoSearch.trim()) return data;
+    const q = videoSearch.toLowerCase();
+    return data.filter(
+      (v) =>
+        (v.caption ?? "").toLowerCase().includes(q) ||
+        v.video_url.toLowerCase().includes(q) ||
+        (v.creator?.display_name ?? "").toLowerCase().includes(q) ||
+        (v.tags ?? []).some((t) => t.toLowerCase().includes(q))
+    );
+  }, [data, videoSearch]);
 
   async function del(id: string) {
     if (!confirm("Delete this video?")) return;
@@ -434,8 +440,24 @@ function VideosTab({ initialEditId }: { initialEditId?: string }) {
     else { toast.success("Deleted"); qc.invalidateQueries({ queryKey: ["admin-videos"] }); qc.invalidateQueries({ queryKey: ["feed"] }); }
   }
   return (
-    <div className="space-y-2">
-      {data?.map((v) => (
+    <div className="space-y-3">
+      {/* Search bar */}
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={videoSearch}
+          onChange={(e) => setVideoSearch(e.target.value)}
+          placeholder="Search videos by caption, creator, tags, URL..."
+          className="h-11 rounded-xl glass pl-10 text-sm"
+        />
+      </div>
+
+      <p className="text-[11px] text-muted-foreground">
+        {filteredVideos.length} video{filteredVideos.length !== 1 ? "s" : ""}
+        {videoSearch && ` matching "${videoSearch}"`}
+      </p>
+
+      {filteredVideos.map((v) => (
         <div key={v.id} className="flex items-center gap-3 rounded-2xl glass p-3">
           <button onClick={() => setEditing(v)} className="h-16 w-12 shrink-0 overflow-hidden rounded-lg bg-card tap-scale">
             {v.thumbnail_url ? <img src={v.thumbnail_url} className="h-full w-full object-cover" alt="" /> : <video src={v.video_url} className="h-full w-full object-cover" muted />}
@@ -530,12 +552,7 @@ function EditVideoDialog({ video, creators, onClose }: { video: AdminVideoRow | 
         <div className="space-y-3">
           <div className="space-y-1.5">
             <Label>Creator</Label>
-            <Select value={form.creator_id} onValueChange={(v) => setForm({ ...form, creator_id: v })}>
-              <SelectTrigger className="h-11 rounded-xl glass"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {creators.map((c) => <SelectItem key={c.id} value={c.id}>{c.display_name} (@{c.username})</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <CreatorPicker creators={creators} value={form.creator_id} onChange={(v) => setForm({ ...form, creator_id: v })} />
           </div>
           <div className="space-y-1.5">
             <Label>Video URL {isStorage && <span className="text-[10px] text-muted-foreground">(stored in DB)</span>}</Label>
@@ -594,6 +611,71 @@ function CreatorsTab() {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<CreatorRow | null>(null);
 
+  // ── Duplicate scanner ──
+  const [dupCreatorId, setDupCreatorId] = useState("");
+  const [dupScanning, setDupScanning] = useState(false);
+  const [dupResults, setDupResults] = useState<Array<{ url: string; ids: string[]; captions: string[]; count: number }>>([]);
+  const [dupDeleting, setDupDeleting] = useState<Set<string>>(new Set());
+
+  async function scanDuplicates() {
+    if (!dupCreatorId) { toast.error("Select a creator first"); return; }
+    setDupScanning(true);
+    setDupResults([]);
+    try {
+      const { data: videos, error } = await supabase
+        .from("videos")
+        .select("id, video_url, caption")
+        .eq("creator_id", dupCreatorId)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      if (!videos?.length) { toast.message("No videos found for this creator"); setDupScanning(false); return; }
+
+      // Group by normalized URL (strip query params, trailing slashes)
+      const byUrl = new Map<string, Array<{ id: string; caption: string | null }>>();
+      for (const v of videos) {
+        const norm = v.video_url
+          .replace(/[?#].*$/, "")
+          .replace(/\/+$/, "")
+          .toLowerCase();
+        if (!byUrl.has(norm)) byUrl.set(norm, []);
+        byUrl.get(norm)!.push({ id: v.id, caption: v.caption });
+      }
+
+      const dups: typeof dupResults = [];
+      for (const [url, entries] of byUrl) {
+        if (entries.length > 1) {
+          dups.push({
+            url: url.length > 80 ? url.slice(0, 77) + "..." : url,
+            ids: entries.map((e) => e.id),
+            captions: entries.map((e) => e.caption ?? "Untitled"),
+            count: entries.length,
+          });
+        }
+      }
+      dups.sort((a, b) => b.count - a.count);
+      setDupResults(dups);
+      toast.message(dups.length ? `Found ${dups.length} duplicate groups` : "No duplicates found ✓");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setDupScanning(false);
+    }
+  }
+
+  async function deleteDupGroup(ids: string[]) {
+    if (!confirm(`Delete ${ids.length - 1} duplicate${ids.length - 1 > 1 ? "s" : ""}? (Keeps the newest one)`)) return;
+    // Keep the first (newest, since ordered by created_at desc), delete the rest
+    const toDelete = ids.slice(1);
+    setDupDeleting((s) => { const n = new Set(s); toDelete.forEach((id) => n.add(id)); return n; });
+    const { error } = await supabase.from("videos").delete().in("id", toDelete);
+    setDupDeleting(new Set());
+    if (error) { toast.error(error.message); return; }
+    toast.success(`Deleted ${toDelete.length} duplicates`);
+    setDupResults((prev) => prev.filter((d) => !ids.every((id, i) => i === 0 || toDelete.includes(id))));
+    qc.invalidateQueries({ queryKey: ["admin-videos"] });
+    qc.invalidateQueries({ queryKey: ["feed"] });
+  }
+
   async function create(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -633,6 +715,50 @@ function CreatorsTab() {
             <button onClick={() => del(c.id)} className="tap-scale rounded-full p-2 text-destructive"><Trash2 className="h-4 w-4" /></button>
           </div>
         ))}
+      </div>
+
+      {/* ── Duplicate scanner ── */}
+      <div className="rounded-2xl glass p-4 space-y-3">
+        <h3 className="flex items-center gap-1.5 text-sm font-semibold"><Copy className="h-4 w-4" /> Find duplicate videos</h3>
+        <p className="text-[11px] text-muted-foreground">
+          Scans all videos for a selected creator and groups them by normalized URL. Keeps the newest, deletes the rest in one click.
+        </p>
+        <div className="flex items-end gap-3">
+          <div className="flex-1">
+            <Label>Creator</Label>
+            <CreatorPicker creators={data ?? []} value={dupCreatorId} onChange={setDupCreatorId} placeholder="Pick a creator..." />
+          </div>
+          <Button onClick={scanDuplicates} disabled={dupScanning || !dupCreatorId} className="h-12 rounded-xl gradient-primary text-primary-foreground">
+            {dupScanning ? <Loader2 className="h-4 w-4 animate-spin" /> : "Scan"}
+          </Button>
+        </div>
+
+        {dupResults.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-xs text-muted-foreground">
+              {dupResults.length} duplicate group{dupResults.length !== 1 ? "s" : ""} · {dupResults.reduce((s, d) => s + d.count - 1, 0)} extra videos found
+            </p>
+            {dupResults.map((d) => (
+              <div key={d.ids[0]} className="flex items-center gap-3 rounded-xl bg-destructive/5 p-3">
+                <div className="flex-1 min-w-0 space-y-1">
+                  <p className="truncate text-xs font-mono text-muted-foreground">{d.url}</p>
+                  <p className="text-[10px] text-muted-foreground/70">
+                    {d.count}x · {d.captions.filter((c, i, a) => a.indexOf(c) === i).slice(0, 2).join(", ")}
+                    {d.captions.length > 2 ? ` +${d.captions.length - 2} more` : ""}
+                  </p>
+                </div>
+                <Button
+                  onClick={() => deleteDupGroup(d.ids)}
+                  disabled={dupDeleting.has(d.ids[1])}
+                  size="sm"
+                  className="shrink-0 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Remove {d.count - 1} dup{d.count - 1 > 1 ? "s" : ""}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
       <EditCreatorDialog creator={editing} onClose={() => setEditing(null)} />
     </div>

@@ -25,6 +25,7 @@ export function VideoFeed({ videos, likedSet, savedSet, loading, emptyText, init
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const scrolledToInitial = useRef(false);
   const pool = useRef(getVideoPool()).current;
+  const failedVideos = useRef<Set<string>>(new Set());
 
   // Scroll to initial index
   useEffect(() => {
@@ -66,6 +67,32 @@ export function VideoFeed({ videos, likedSet, savedSet, loading, emptyText, init
     []
   );
 
+  // Auto-skip: when any pool slot's preload fails after timeout, mark it and advance
+  const skipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    // Poll for preload-failed videos on slots
+    const check = setInterval(() => {
+      for (let s = 0; s < 3; s++) {
+        const slot = pool.slots[s];
+        if (slot.videoId && pool.isPreloadFailed(s)) {
+          failedVideos.current.add(slot.videoId);
+          // If the failed video is the active one, auto-scroll to next
+          const failedIdx = videos.findIndex((v) => v.id === slot.videoId);
+          if (failedIdx >= 0 && failedIdx === active && failedIdx < videos.length - 1) {
+            const nextEl = itemRefs.current[failedIdx + 1];
+            if (nextEl) {
+              nextEl.scrollIntoView({ block: "start", behavior: "smooth" });
+            }
+          }
+          // Clear the failed marker so we don't re-trigger
+          pool.recycle(s);
+        }
+      }
+    }, 2000);
+
+    return () => clearInterval(check);
+  }, [active, videos, pool]);
+
   // Recycle slots that are no longer in the visible window
   useEffect(() => {
     const activeSlot = poolSlotFor(active);
@@ -75,7 +102,6 @@ export function VideoFeed({ videos, likedSet, savedSet, loading, emptyText, init
         windowSlots.add(poolSlotFor(i));
       }
     }
-    // Recycle slots not in window
     for (let s = 0; s < 3; s++) {
       if (!windowSlots.has(s) && pool.slots[s].state !== "idle") {
         pool.recycle(s);
@@ -107,6 +133,7 @@ export function VideoFeed({ videos, likedSet, savedSet, loading, emptyText, init
         const isActive = i === active;
         const slotState: SlotState =
           pool.slots[slot].videoId === v.id ? pool.slots[slot].state : "idle";
+        const isSkipped = failedVideos.current.has(v.id);
 
         return (
           <div
@@ -123,12 +150,12 @@ export function VideoFeed({ videos, likedSet, savedSet, loading, emptyText, init
                 onToggleMute={() => setMuted((m) => !m)}
                 pool={pool}
                 poolSlot={slot}
-                state={slotState}
+                state={isSkipped ? "error" : slotState}
                 initialLiked={likedSet?.has(v.id)}
                 initialSaved={savedSet?.has(v.id)}
               />
             ) : (
-              <Placeholder thumbnail={v.thumbnail_url} />
+              <Placeholder thumbnail={v.thumbnail_url} skipped={isSkipped} />
             )}
           </div>
         );
@@ -137,11 +164,16 @@ export function VideoFeed({ videos, likedSet, savedSet, loading, emptyText, init
   );
 }
 
-function Placeholder({ thumbnail }: { thumbnail: string | null }) {
+function Placeholder({ thumbnail, skipped }: { thumbnail: string | null; skipped?: boolean }) {
   return (
     <div className="h-full w-full bg-black">
       {thumbnail && (
-        <img src={thumbnail} alt="" className="h-full w-full object-cover opacity-40" />
+        <img src={thumbnail} alt="" className={`h-full w-full object-cover ${skipped ? "opacity-15" : "opacity-40"}`} />
+      )}
+      {skipped && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-[10px] text-muted-foreground/50">Video unavailable</span>
+        </div>
       )}
     </div>
   );

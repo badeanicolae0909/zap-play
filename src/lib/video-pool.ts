@@ -26,6 +26,8 @@ export interface VideoSlot {
   retryCount: number;
   maxRetries: number;
   abortController: AbortController | null;
+  preloadFailed: boolean;
+  preloadTimeout: ReturnType<typeof setTimeout> | null;
 }
 
 const RETRY_DELAYS = [1000, 2000, 4000]; // ms between retries
@@ -98,6 +100,8 @@ export class VideoPool {
       retryCount: 0,
       maxRetries: MAX_RETRIES,
       abortController: null,
+      preloadFailed: false,
+      preloadTimeout: null,
     };
   }
 
@@ -158,6 +162,10 @@ export class VideoPool {
       slot.abortController.abort();
       slot.abortController = null;
     }
+    if (slot.preloadTimeout) {
+      clearTimeout(slot.preloadTimeout);
+      slot.preloadTimeout = null;
+    }
 
     if (sameVideo) {
       // Already have this video — just ensure it's playing if it was ready
@@ -182,10 +190,30 @@ export class VideoPool {
     // Start loading — if the AC fires mid-load, the browser cancels the fetch
     slot.el.load();
 
+    // Set 10-second preload timeout — if the video doesn't load in 10s, mark it as failed
+    // so the feed can skip it. This prevents users from getting stuck on dead videos.
+    slot.preloadTimeout = setTimeout(() => {
+      if (slot.state === "preloading" && !slot.preloadFailed) {
+        slot.preloadFailed = true;
+        // Cancel the load
+        if (slot.abortController) {
+          slot.abortController.abort();
+          slot.abortController = null;
+        }
+        slot.el.removeAttribute("src");
+        slot.el.load();
+        slot.state = "idle";
+      }
+    }, 10_000);
+
     // Clean up AC if load succeeds or fails
     const onDone = () => {
       if (slot.abortController === ac) {
         slot.abortController = null;
+      }
+      if (slot.preloadTimeout) {
+        clearTimeout(slot.preloadTimeout);
+        slot.preloadTimeout = null;
       }
     };
     slot.el.addEventListener("loadeddata", onDone, { once: true });
@@ -283,6 +311,12 @@ export class VideoPool {
     slot.src = null;
     slot.retryCount = 0;
     slot.state = "idle";
+    slot.preloadFailed = false;
+  }
+
+  /** Check if a video failed to preload — feed uses this to auto-skip dead videos. */
+  isPreloadFailed(slotIndex: number): boolean {
+    return this.slots[slotIndex].preloadFailed;
   }
 
   /** Position a slot's video element into a snap container. No remounting. */

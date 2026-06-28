@@ -479,31 +479,60 @@ export function VideoCard({
       {!isEmbed && (
         <button
           onClick={(e) => { e.stopPropagation(); onToggleMute(); haptic("light"); }}
-          className={`tap-scale absolute right-3 top-3 z-40 glass rounded-full p-2.5 transition-opacity duration-300 ${controlsVisible || paused ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+          className={`tap-scale absolute right-3 top-3 z-40 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 backdrop-blur-md ring-1 ring-white/10 transition-all duration-300 hover:bg-black/60 ${controlsVisible || paused ? "opacity-100" : "opacity-0 pointer-events-none"}`}
         >
-          {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+          {muted ? <VolumeX className="h-4 w-4 text-white/90" /> : <Volume2 className="h-4 w-4 text-white/90" />}
         </button>
       )}
 
-      {/* Right action rail */}
-      <div className={`absolute bottom-40 right-3 z-40 flex flex-col items-center gap-5 transition-opacity duration-300 ${controlsVisible || paused ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+      {/* Right action rail — modern minimal glass design */}
+      <div className={`absolute bottom-36 right-3 z-40 flex flex-col items-center gap-3 transition-all duration-300 ${controlsVisible || paused ? "opacity-100 translate-x-0" : "opacity-0 translate-x-2 pointer-events-none"}`}>
         {video.creator && (
-          <Link to="/creator/$username" params={{ username: video.creator.username }} className="tap-scale relative">
-            <div className="h-12 w-12 overflow-hidden rounded-full border-2 border-foreground gradient-primary">
-              {video.creator.avatar_url && (
+          <Link to="/creator/$username" params={{ username: video.creator.username }} className="tap-scale relative group">
+            <div className="h-10 w-10 overflow-hidden rounded-full ring-2 ring-white/20 transition-all group-hover:ring-white/50">
+              {video.creator.avatar_url ? (
                 <img src={video.creator.avatar_url} alt={video.creator.display_name} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center gradient-primary text-xs font-bold text-primary-foreground">
+                  {video.creator.display_name.charAt(0)}
+                </div>
               )}
             </div>
-            <div className="absolute -bottom-2 left-1/2 flex h-5 w-5 -translate-x-1/2 items-center justify-center rounded-full gradient-primary text-xs font-bold text-primary-foreground">+</div>
+            <div className="absolute -bottom-1 left-1/2 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full bg-primary text-[8px] font-bold text-primary-foreground shadow-lg">+</div>
           </Link>
         )}
-        <ActionBtn onClick={toggleLike} icon={<Heart className={`h-7 w-7 ${liked ? "fill-primary text-primary" : ""}`} />} label={fmt(likeCount)} active={liked} />
-        <ActionBtn onClick={toggleSave} icon={<Bookmark className={`h-7 w-7 ${saved ? "fill-accent text-accent" : ""}`} />} label="Save" active={saved} />
-        <ActionBtn onClick={share} icon={<Share2 className="h-7 w-7" />} label="Share" />
+        <button onClick={toggleLike} className="tap-scale group flex flex-col items-center gap-0.5">
+          <div className={`flex h-10 w-10 items-center justify-center rounded-full bg-black/40 backdrop-blur-md ring-1 ring-white/10 transition-all group-hover:bg-black/60 ${liked ? "ring-primary/50" : ""}`}>
+            <Heart className={`h-5 w-5 transition-all ${liked ? "fill-primary text-primary scale-110" : "text-white/80 group-hover:text-white"}`} />
+          </div>
+          <span className="text-[10px] font-semibold text-white/70 drop-shadow">{fmt(likeCount)}</span>
+        </button>
+        <button onClick={toggleSave} className="tap-scale group flex flex-col items-center gap-0.5">
+          <div className={`flex h-10 w-10 items-center justify-center rounded-full bg-black/40 backdrop-blur-md ring-1 ring-white/10 transition-all group-hover:bg-black/60 ${saved ? "ring-accent/50" : ""}`}>
+            <Bookmark className={`h-5 w-5 transition-all ${saved ? "fill-accent text-accent scale-110" : "text-white/80 group-hover:text-white"}`} />
+          </div>
+          <span className="text-[10px] font-semibold text-white/70 drop-shadow">Save</span>
+        </button>
+        <button onClick={share} className="tap-scale group flex flex-col items-center gap-0.5">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black/40 backdrop-blur-md ring-1 ring-white/10 transition-all group-hover:bg-black/60">
+            <Share2 className="h-5 w-5 text-white/80 transition-all group-hover:text-white" />
+          </div>
+          <span className="text-[10px] font-semibold text-white/70 drop-shadow">Share</span>
+        </button>
         {isAdmin && (
           <>
-            <ActionBtn onClick={editAsAdmin} icon={<Pencil className="h-7 w-7" />} label="Edit" />
-            <ActionBtn onClick={() => setConfirmDelete(true)} icon={<Trash2 className="h-7 w-7 text-destructive" />} label="Delete" />
+            <button onClick={editAsAdmin} className="tap-scale group flex flex-col items-center gap-0.5">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black/40 backdrop-blur-md ring-1 ring-white/10 transition-all group-hover:bg-black/60">
+                <Pencil className="h-5 w-5 text-white/80 transition-all group-hover:text-white" />
+              </div>
+              <span className="text-[10px] font-semibold text-white/70 drop-shadow">Edit</span>
+            </button>
+            <button onClick={() => setConfirmDelete(true)} className="tap-scale group flex flex-col items-center gap-0.5">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black/40 backdrop-blur-md ring-1 ring-white/10 transition-all group-hover:bg-red-500/20 group-hover:ring-red-500/30">
+                <Trash2 className="h-5 w-5 text-white/80 transition-all group-hover:text-red-400" />
+              </div>
+              <span className="text-[10px] font-semibold text-white/70 drop-shadow">Delete</span>
+            </button>
           </>
         )}
       </div>
@@ -532,7 +561,7 @@ export function VideoCard({
       )}
 
       {/* Bottom info */}
-      <div className={`absolute inset-x-0 bottom-28 z-40 px-4 transition-opacity duration-300 ${controlsVisible || paused ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+      <div className={`absolute inset-x-0 bottom-24 z-40 px-4 transition-opacity duration-300 ${controlsVisible || paused ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
         {video.creator && (
           <Link to="/creator/$username" params={{ username: video.creator.username }} className="inline-flex items-center gap-2">
             <span className="text-base font-bold tracking-tight">@{video.creator.username}</span>
@@ -574,15 +603,6 @@ export function VideoCard({
         </div>
       )}
     </div>
-  );
-}
-
-function ActionBtn({ icon, label, onClick, active }: { icon: React.ReactNode; label: string; onClick: () => void; active?: boolean }) {
-  return (
-    <button onClick={onClick} className="tap-scale flex flex-col items-center gap-0.5">
-      <div className={`flex h-11 w-11 items-center justify-center rounded-full ${active ? "" : "glass"}`}>{icon}</div>
-      <span className="text-[11px] font-semibold drop-shadow">{label}</span>
-    </button>
   );
 }
 
