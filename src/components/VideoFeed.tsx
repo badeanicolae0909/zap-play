@@ -12,7 +12,7 @@ type Props = {
   initialIndex?: number;
 };
 
-const WINDOW_SIZE = 1; // active ± 1 → 3 cards total
+const WINDOW_SIZE = 1;
 
 function isInWindow(i: number, active: number): boolean {
   return Math.abs(i - active) <= WINDOW_SIZE;
@@ -26,7 +26,7 @@ export function VideoFeed({ videos, likedSet, savedSet, loading, emptyText, init
   const scrolledToInitial = useRef(false);
   const pool = useRef(getVideoPool()).current;
 
-  // Scroll to initialIndex on first load
+  // Scroll to initial index
   useEffect(() => {
     if (scrolledToInitial.current) return;
     if (!videos.length) return;
@@ -38,7 +38,7 @@ export function VideoFeed({ videos, likedSet, savedSet, loading, emptyText, init
     }
   }, [videos.length, initialIndex]);
 
-  // IntersectionObserver to track which snap item is most visible
+  // IntersectionObserver for active video detection
   useEffect(() => {
     const obs = new IntersectionObserver(
       (entries) => {
@@ -55,16 +55,33 @@ export function VideoFeed({ videos, likedSet, savedSet, loading, emptyText, init
     return () => obs.disconnect();
   }, [videos.length]);
 
-  // Sync muted state to all pool slots
+  // Sync muted state globally
   useEffect(() => {
     pool.setMuted(muted);
   }, [muted, pool]);
 
-  // Assign pool slot by video index (round-robin via modulo)
+  // Assign pool slot by video index (round-robin modulo 3)
   const poolSlotFor = useCallback(
     (videoIndex: number): number => videoIndex % 3,
     []
   );
+
+  // Recycle slots that are no longer in the visible window
+  useEffect(() => {
+    const activeSlot = poolSlotFor(active);
+    const windowSlots = new Set<number>();
+    for (let i = active - WINDOW_SIZE; i <= active + WINDOW_SIZE; i++) {
+      if (i >= 0 && i < videos.length) {
+        windowSlots.add(poolSlotFor(i));
+      }
+    }
+    // Recycle slots not in window
+    for (let s = 0; s < 3; s++) {
+      if (!windowSlots.has(s) && pool.slots[s].state !== "idle") {
+        pool.recycle(s);
+      }
+    }
+  }, [active, videos.length, pool, poolSlotFor]);
 
   if (loading) {
     return (

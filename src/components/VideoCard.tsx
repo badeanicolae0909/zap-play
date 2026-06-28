@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Heart, Bookmark, Share2, Play, Volume2, VolumeX, Music2, FastForward, Rewind, Loader2, Pencil, Trash2 } from "lucide-react";
+import { Heart, Bookmark, Share2, Play, Volume2, VolumeX, Music2, FastForward, Rewind, Loader2, Pencil, Trash2, RefreshCw, AlertTriangle } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -342,7 +342,19 @@ export function VideoCard({
     if (active && !paused) pool.play(poolSlot);
   }
 
-  const showLoading = (!isEmbed && state === "loading" && !resolvedSrc);
+  const showLoading = (!isEmbed && (state === "preloading" || state === "error_retry") && !resolvedSrc);
+  const showError = !isEmbed && state === "error";
+  const showThumbnailOnly = !isEmbed && !videoMounted && video.thumbnail_url;
+
+  // Manual retry for permanent errors
+  function retryLoad() {
+    if (!resolvedSrc) return;
+    pool.slots[poolSlot].retryCount = 0;
+    pool.slots[poolSlot].state = "preloading";
+    pool.slots[poolSlot].el.src = resolvedSrc;
+    if (video.thumbnail_url) pool.slots[poolSlot].el.poster = video.thumbnail_url;
+    pool.slots[poolSlot].el.load();
+  }
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-black">
@@ -375,16 +387,45 @@ export function VideoCard({
         />
       )}
 
-      {/* Loading */}
+      {/* Loading / error states */}
       {showLoading && (
         <>
           {video.thumbnail_url && (
-            <img src={video.thumbnail_url} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" />
+            <img src={video.thumbnail_url} alt="" className="absolute inset-0 h-full w-full object-cover opacity-40" />
           )}
-          <div className="absolute inset-0 flex items-center justify-center">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
             <Loader2 className="h-7 w-7 animate-spin text-foreground/70" />
+            {state === "error_retry" && (
+              <span className="text-[11px] text-muted-foreground">
+                Retrying… ({pool.slots[poolSlot].retryCount}/{pool.slots[poolSlot].maxRetries})
+              </span>
+            )}
           </div>
         </>
+      )}
+
+      {showError && (
+        <>
+          {video.thumbnail_url && (
+            <img src={video.thumbnail_url} alt="" className="absolute inset-0 h-full w-full object-cover opacity-20" />
+          )}
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60">
+            <AlertTriangle className="h-8 w-8 text-destructive/70" />
+            <p className="text-sm text-muted-foreground">Video failed to load</p>
+            <button
+              onClick={(e) => { e.stopPropagation(); retryLoad(); haptic("light"); }}
+              className="tap-scale flex items-center gap-2 rounded-full glass px-4 py-2 text-sm font-medium"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Retry
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Thumbnail-only (mounting but video not yet assigned) */}
+      {showThumbnailOnly && !showLoading && !showError && (
+        <img src={video.thumbnail_url!} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" />
       )}
 
       {/* Gradients */}
