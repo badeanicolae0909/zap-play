@@ -324,24 +324,31 @@ export function VideoCard({
 
   function onScrubDown(e: React.PointerEvent<HTMLDivElement>) {
     e.stopPropagation();
+    scrubbingRef.current = true;
     setScrubbing(true);
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    const el = pool.slots[poolSlot].el;
+    scrubWasPausedRef.current = el.paused;
     pool.pause(poolSlot);
     haptic("light");
     seekFromClientX(e.clientX);
   }
 
   function onScrubMove(e: React.PointerEvent<HTMLDivElement>) {
-    if (!scrubbing) return;
+    if (!scrubbingRef.current) return;
     e.stopPropagation();
     seekFromClientX(e.clientX);
   }
 
   function onScrubUp(e: React.PointerEvent<HTMLDivElement>) {
-    if (!scrubbing) return;
+    if (!scrubbingRef.current) return;
     e.stopPropagation();
+    scrubbingRef.current = false;
     setScrubbing(false);
-    if (active && !paused) pool.play(poolSlot);
+    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+    if (active && !scrubWasPausedRef.current) {
+      pool.play(poolSlot);
+    }
   }
 
   const showLoading = (!isEmbed && (state === "preloading" || state === "error_retry") && !resolvedSrc);
