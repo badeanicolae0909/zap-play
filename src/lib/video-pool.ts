@@ -333,6 +333,10 @@ export class VideoPool {
 
 let _pool: VideoPool | null = null;
 export function getVideoPool(): VideoPool {
+  if (typeof document === "undefined") {
+    // SSR: return a stub-shaped object; real pool is created on client mount.
+    return { slots: [{}, {}, {}] } as unknown as VideoPool;
+  }
   if (!_pool) _pool = new VideoPool();
   return _pool;
 }
