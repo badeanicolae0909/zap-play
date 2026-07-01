@@ -126,6 +126,8 @@ export function VideoCard({
   const lastTapRef = useRef(0);
   const pointerStart = useRef<{ x: number; y: number; t: number } | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrubWasPausedRef = useRef(false);
+  const scrubbingRef = useRef(false);
 
   useEffect(() => {
     if (!active || !videoMounted) return;
