@@ -54,6 +54,7 @@ export function BottomNav() {
         })}
         <Link
           to="/admin"
+          search={{ tab: undefined, edit: undefined }}
           onClick={() => haptic("light")}
           className="tap-scale relative flex flex-1 items-center justify-center rounded-full px-2 py-1.5"
           aria-label={isAdmin ? "Admin" : "Claim admin"}
