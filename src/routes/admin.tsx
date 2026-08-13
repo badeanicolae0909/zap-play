@@ -106,6 +106,7 @@ function UploadTab() {
   const [mode, setMode] = useState<"file" | "url" | "bunny">("url");
   const [creatorId, setCreatorId] = useState("");
   const [caption, setCaption] = useState("");
+  const [mirrors, setMirrors] = useState<string[]>([]);
   const [tags, setTags] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [thumb, setThumb] = useState<File | null>(null);
