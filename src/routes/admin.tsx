@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Upload, Trash2, Plus, Film, Users, Shield, Download, Loader2, Pencil, Search, Copy, Check } from "lucide-react";
 import { CreatorPicker } from "@/components/CreatorPicker";
+import { MentionCaptionInput } from "@/components/MentionCaptionInput";
 import { scrapeBunkr, importBunkr } from "@/lib/bunkr.functions";
 import { createBunnyUpload } from "@/lib/bunny.functions";
 import * as tus from "tus-js-client";
@@ -106,6 +107,7 @@ function UploadTab() {
   const [mode, setMode] = useState<"file" | "url" | "bunny">("url");
   const [creatorId, setCreatorId] = useState("");
   const [caption, setCaption] = useState("");
+  const [mirrors, setMirrors] = useState<string[]>([]);
   const [tags, setTags] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [thumb, setThumb] = useState<File | null>(null);
@@ -176,18 +178,25 @@ function UploadTab() {
       }
 
       setProgress(85);
-      const { error: insErr } = await supabase.from("videos").insert({
+      const { data: inserted, error: insErr } = await supabase.from("videos").insert({
         creator_id: creatorId,
         video_url: finalVideoUrl,
         thumbnail_url: finalThumbUrl,
         caption: caption || null,
         is_featured: featured,
         tags: tags ? tags.split(",").map((t) => t.trim().replace(/^#/, "")).filter(Boolean) : [],
-      });
+      }).select("id").single();
       if (insErr) throw insErr;
+      const mirrorTargets = mirrors.filter((id) => id !== creatorId);
+      if (inserted && mirrorTargets.length) {
+        const { error: mErr } = await supabase.from("video_mirrors").insert(
+          mirrorTargets.map((cid) => ({ video_id: inserted.id, creator_id: cid }))
+        );
+        if (mErr) toast.error(`Mirrors failed: ${mErr.message}`);
+      }
       setProgress(100);
-      toast.success("Video published");
-      setFile(null); setThumb(null); setVideoUrl(""); setThumbUrl(""); setCaption(""); setTags(""); setFeatured(false);
+      toast.success(mirrorTargets.length ? `Video published on ${mirrorTargets.length + 1} profiles` : "Video published");
+      setFile(null); setThumb(null); setVideoUrl(""); setThumbUrl(""); setCaption(""); setTags(""); setFeatured(false); setMirrors([]);
       qc.invalidateQueries({ queryKey: ["feed"] });
       qc.invalidateQueries({ queryKey: ["admin-videos"] });
     } catch (err) {
@@ -248,7 +257,14 @@ function UploadTab() {
 
       <div className="space-y-1.5">
         <Label>Caption</Label>
-        <Textarea value={caption} onChange={(e) => setCaption(e.target.value)} rows={3} className="glass rounded-xl" placeholder="Write a caption…" />
+        <MentionCaptionInput
+          creators={creators ?? []}
+          value={caption}
+          onChange={setCaption}
+          mirrors={mirrors}
+          onMirrorsChange={setMirrors}
+        />
+        <p className="text-[11px] text-muted-foreground">Type <span className="font-medium">@</span> to mention a creator — the video is also shown on that creator&apos;s profile.</p>
       </div>
       <div className="space-y-1.5">
         <Label>Tags (comma separated)</Label>
@@ -486,9 +502,19 @@ function EditVideoDialog({ video, creators, onClose }: { video: AdminVideoRow | 
   const [thumbFile, setThumbFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [loadedId, setLoadedId] = useState("");
+  const [mirrorOverride, setMirrorOverride] = useState<string[] | null>(null);
+
+  const { data: savedMirrors } = useQuery({
+    queryKey: ["video-mirrors", video?.id],
+    enabled: !!video,
+    queryFn: async () =>
+      ((await supabase.from("video_mirrors").select("creator_id").eq("video_id", video!.id)).data ?? []).map((r) => r.creator_id),
+  });
+  const mirrors = mirrorOverride ?? savedMirrors ?? [];
 
   if (video && loadedId !== video.id) {
     setLoadedId(video.id);
+    setMirrorOverride(null);
     setForm({
       caption: video.caption ?? "",
       tags: (video.tags ?? []).join(", "),
@@ -533,7 +559,20 @@ function EditVideoDialog({ video, creators, onClose }: { video: AdminVideoRow | 
       }).eq("id", video.id);
       if (error) throw error;
       toast.success("Video updated");
+      // Sync mirrors (extra creator profiles this video shows on)
+      const desired = mirrors.filter((id) => id !== form.creator_id);
+      const existing = savedMirrors ?? [];
+      const toAdd = desired.filter((id) => !existing.includes(id));
+      const toRemove = existing.filter((id) => !desired.includes(id));
+      if (toAdd.length) {
+        await supabase.from("video_mirrors").insert(toAdd.map((cid) => ({ video_id: video.id, creator_id: cid })));
+      }
+      if (toRemove.length) {
+        await supabase.from("video_mirrors").delete().eq("video_id", video.id).in("creator_id", toRemove);
+      }
       qc.invalidateQueries({ queryKey: ["admin-videos"] });
+      qc.invalidateQueries({ queryKey: ["video-mirrors", video.id] });
+      qc.invalidateQueries({ queryKey: ["creator"] });
       qc.invalidateQueries({ queryKey: ["feed"] });
       onClose();
     } catch (e) {
@@ -566,7 +605,13 @@ function EditVideoDialog({ video, creators, onClose }: { video: AdminVideoRow | 
           <FileDrop label="Replace thumbnail (optional)" accept="image/*" file={thumbFile} onFile={setThumbFile} />
           <div className="space-y-1.5">
             <Label>Caption</Label>
-            <Textarea value={form.caption} onChange={(e) => setForm({ ...form, caption: e.target.value })} rows={3} className="rounded-xl glass" />
+            <MentionCaptionInput
+              creators={creators}
+              value={form.caption}
+              onChange={(v) => setForm({ ...form, caption: v })}
+              mirrors={mirrors}
+              onMirrorsChange={setMirrorOverride}
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Tags (comma separated)</Label>
