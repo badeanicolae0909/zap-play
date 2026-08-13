@@ -502,9 +502,19 @@ function EditVideoDialog({ video, creators, onClose }: { video: AdminVideoRow | 
   const [thumbFile, setThumbFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [loadedId, setLoadedId] = useState("");
+  const [mirrorOverride, setMirrorOverride] = useState<string[] | null>(null);
+
+  const { data: savedMirrors } = useQuery({
+    queryKey: ["video-mirrors", video?.id],
+    enabled: !!video,
+    queryFn: async () =>
+      ((await supabase.from("video_mirrors").select("creator_id").eq("video_id", video!.id)).data ?? []).map((r) => r.creator_id),
+  });
+  const mirrors = mirrorOverride ?? savedMirrors ?? [];
 
   if (video && loadedId !== video.id) {
     setLoadedId(video.id);
+    setMirrorOverride(null);
     setForm({
       caption: video.caption ?? "",
       tags: (video.tags ?? []).join(", "),
