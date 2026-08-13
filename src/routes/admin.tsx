@@ -256,7 +256,14 @@ function UploadTab() {
 
       <div className="space-y-1.5">
         <Label>Caption</Label>
-        <Textarea value={caption} onChange={(e) => setCaption(e.target.value)} rows={3} className="glass rounded-xl" placeholder="Write a caption…" />
+        <MentionCaptionInput
+          creators={creators ?? []}
+          value={caption}
+          onChange={setCaption}
+          mirrors={mirrors}
+          onMirrorsChange={setMirrors}
+        />
+        <p className="text-[11px] text-muted-foreground">Type <span className="font-medium">@</span> to mention a creator — the video is also shown on that creator&apos;s profile.</p>
       </div>
       <div className="space-y-1.5">
         <Label>Tags (comma separated)</Label>
