@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Upload, Trash2, Plus, Film, Users, Shield, Download, Loader2, Pencil, Search, Copy, Check } from "lucide-react";
 import { CreatorPicker } from "@/components/CreatorPicker";
+import { MentionCaptionInput } from "@/components/MentionCaptionInput";
 import { scrapeBunkr, importBunkr } from "@/lib/bunkr.functions";
 import { createBunnyUpload } from "@/lib/bunny.functions";
 import * as tus from "tus-js-client";
