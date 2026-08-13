@@ -24,8 +24,23 @@ function CreatorPage() {
     queryFn: async () => {
       const { data: c } = await supabase.from("creators").select("*").eq("username", username).maybeSingle();
       if (!c) return null;
-      const { data: v } = await supabase.from("videos").select("id, thumbnail_url, video_url, view_count").eq("creator_id", c.id).eq("is_active", true).order("created_at", { ascending: false });
-      return { creator: c, videos: (v ?? []) as VideoRow[] };
+      const [{ data: v }, { data: mirrors }] = await Promise.all([
+        supabase.from("videos").select("id, thumbnail_url, video_url, view_count, created_at").eq("creator_id", c.id).eq("is_active", true).order("created_at", { ascending: false }),
+        supabase.from("video_mirrors").select("video_id").eq("creator_id", c.id),
+      ]);
+      let rows = (v ?? []) as Array<VideoRow & { created_at: string }>;
+      const mirrorIds = (mirrors ?? []).map((m) => m.video_id).filter((id) => !rows.some((r) => r.id === id));
+      if (mirrorIds.length) {
+        const { data: mv } = await supabase
+          .from("videos")
+          .select("id, thumbnail_url, video_url, view_count, created_at")
+          .in("id", mirrorIds)
+          .eq("is_active", true);
+        rows = [...rows, ...((mv ?? []) as Array<VideoRow & { created_at: string }>)].sort((a, b) =>
+          a.created_at < b.created_at ? 1 : -1
+        );
+      }
+      return { creator: c, videos: rows as VideoRow[] };
     },
   });
 
