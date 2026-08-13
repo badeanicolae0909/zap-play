@@ -605,7 +605,13 @@ function EditVideoDialog({ video, creators, onClose }: { video: AdminVideoRow | 
           <FileDrop label="Replace thumbnail (optional)" accept="image/*" file={thumbFile} onFile={setThumbFile} />
           <div className="space-y-1.5">
             <Label>Caption</Label>
-            <Textarea value={form.caption} onChange={(e) => setForm({ ...form, caption: e.target.value })} rows={3} className="rounded-xl glass" />
+            <MentionCaptionInput
+              creators={creators}
+              value={form.caption}
+              onChange={(v) => setForm({ ...form, caption: v })}
+              mirrors={mirrors}
+              onMirrorsChange={setMirrorOverride}
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Tags (comma separated)</Label>
