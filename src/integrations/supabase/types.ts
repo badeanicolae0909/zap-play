@@ -183,6 +183,42 @@ export type Database = {
         }
         Relationships: []
       }
+      video_mirrors: {
+        Row: {
+          created_at: string
+          creator_id: string
+          id: string
+          video_id: string
+        }
+        Insert: {
+          created_at?: string
+          creator_id: string
+          id?: string
+          video_id: string
+        }
+        Update: {
+          created_at?: string
+          creator_id?: string
+          id?: string
+          video_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "video_mirrors_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "creators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "video_mirrors_video_id_fkey"
+            columns: ["video_id"]
+            isOneToOne: false
+            referencedRelation: "videos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       video_views: {
         Row: {
           created_at: string
