@@ -176,18 +176,25 @@ function UploadTab() {
       }
 
       setProgress(85);
-      const { error: insErr } = await supabase.from("videos").insert({
+      const { data: inserted, error: insErr } = await supabase.from("videos").insert({
         creator_id: creatorId,
         video_url: finalVideoUrl,
         thumbnail_url: finalThumbUrl,
         caption: caption || null,
         is_featured: featured,
         tags: tags ? tags.split(",").map((t) => t.trim().replace(/^#/, "")).filter(Boolean) : [],
-      });
+      }).select("id").single();
       if (insErr) throw insErr;
+      const mirrorTargets = mirrors.filter((id) => id !== creatorId);
+      if (inserted && mirrorTargets.length) {
+        const { error: mErr } = await supabase.from("video_mirrors").insert(
+          mirrorTargets.map((cid) => ({ video_id: inserted.id, creator_id: cid }))
+        );
+        if (mErr) toast.error(`Mirrors failed: ${mErr.message}`);
+      }
       setProgress(100);
-      toast.success("Video published");
-      setFile(null); setThumb(null); setVideoUrl(""); setThumbUrl(""); setCaption(""); setTags(""); setFeatured(false);
+      toast.success(mirrorTargets.length ? `Video published on ${mirrorTargets.length + 1} profiles` : "Video published");
+      setFile(null); setThumb(null); setVideoUrl(""); setThumbUrl(""); setCaption(""); setTags(""); setFeatured(false); setMirrors([]);
       qc.invalidateQueries({ queryKey: ["feed"] });
       qc.invalidateQueries({ queryKey: ["admin-videos"] });
     } catch (err) {
