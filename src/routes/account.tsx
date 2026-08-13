@@ -47,7 +47,7 @@ function Account() {
             </div>
           </Link>
           {isAdmin && (
-            <Link to="/admin" className="block tap-scale rounded-2xl glass p-4">
+            <Link to="/admin" search={{ tab: undefined, edit: undefined }} className="block tap-scale rounded-2xl glass p-4">
               <div className="flex items-center justify-between">
                 <span className="font-medium">Admin dashboard</span>
                 <Shield className="h-4 w-4 text-muted-foreground" />
