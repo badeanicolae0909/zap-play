@@ -559,7 +559,20 @@ function EditVideoDialog({ video, creators, onClose }: { video: AdminVideoRow | 
       }).eq("id", video.id);
       if (error) throw error;
       toast.success("Video updated");
+      // Sync mirrors (extra creator profiles this video shows on)
+      const desired = mirrors.filter((id) => id !== form.creator_id);
+      const existing = savedMirrors ?? [];
+      const toAdd = desired.filter((id) => !existing.includes(id));
+      const toRemove = existing.filter((id) => !desired.includes(id));
+      if (toAdd.length) {
+        await supabase.from("video_mirrors").insert(toAdd.map((cid) => ({ video_id: video.id, creator_id: cid })));
+      }
+      if (toRemove.length) {
+        await supabase.from("video_mirrors").delete().eq("video_id", video.id).in("creator_id", toRemove);
+      }
       qc.invalidateQueries({ queryKey: ["admin-videos"] });
+      qc.invalidateQueries({ queryKey: ["video-mirrors", video.id] });
+      qc.invalidateQueries({ queryKey: ["creator"] });
       qc.invalidateQueries({ queryKey: ["feed"] });
       onClose();
     } catch (e) {
