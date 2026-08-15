@@ -84,7 +84,7 @@ function CreatorPage() {
         <h2 className="mb-3 mt-6 text-sm font-semibold text-muted-foreground">Videos</h2>
         <div className="grid grid-cols-3 gap-1">
           {data.videos.map((v) => (
-            <VideoTile key={v.id} video={v} onOpen={() => nav({ to: "/v/$id", params: { id: v.id } })} />
+            <VideoTile key={v.id} video={v} onOpen={() => nav({ to: "/v/$id", params: { id: v.id }, search: { from: username } })} />
           ))}
         </div>
       </div>

@@ -8,55 +8,77 @@ import { useAuth } from "@/lib/auth";
 import { fetchUserInteractions } from "@/lib/feed";
 import type { FeedVideo } from "@/components/VideoCard";
 
-export const Route = createFileRoute("/v/$id")({ component: VideoPage });
+export const Route = createFileRoute("/v/$id")({
+  validateSearch: (s: Record<string, unknown>) => ({
+    from: typeof s.from === "string" ? s.from : undefined,
+  }),
+  component: VideoPage,
+});
+
+const SELECT =
+  "id, video_url, thumbnail_url, caption, tags, like_count, view_count, created_at, creator_id, creator:creators(id, username, display_name, avatar_url)";
 
 function VideoPage() {
   const { id } = Route.useParams();
+  const { from } = Route.useSearch();
   const router = useRouter();
   const { user } = useAuth();
 
-  // Fetch the tapped video first to discover its creator, then fetch the full
-  // creator feed so the user can swipe through the rest like on the main feed.
+  // Build the swipe list from the profile the user came from (so mirrored
+  // videos keep the browsing context of that creator), otherwise fall back to
+  // the video's own creator.
   const { data, isLoading } = useQuery({
-    queryKey: ["video-creator-feed", id],
+    queryKey: ["video-creator-feed", id, from ?? null],
     queryFn: async () => {
       const { data: target, error: e1 } = await supabase
         .from("videos")
-        .select("id, video_url, thumbnail_url, caption, tags, like_count, view_count, creator_id, creator:creators(id, username, display_name, avatar_url)")
+        .select(SELECT)
         .eq("id", id)
         .eq("is_active", true)
         .maybeSingle();
       if (e1) throw e1;
       if (!target) return { target: null as FeedVideo | null, list: [] as FeedVideo[] };
 
-      const { data: list, error: e2 } = await supabase
-        .from("videos")
-        .select("id, video_url, thumbnail_url, caption, tags, like_count, view_count, creator:creators(id, username, display_name, avatar_url)")
-        .eq("creator_id", (target as { creator_id: string }).creator_id)
-        .eq("is_active", true)
-        .order("created_at", { ascending: false });
+      let creatorId = (target as { creator_id: string }).creator_id;
+      if (from) {
+        const { data: c } = await supabase.from("creators").select("id").eq("username", from).maybeSingle();
+        if (c) creatorId = c.id;
+      }
+
+      const [{ data: own, error: e2 }, { data: mirrors }] = await Promise.all([
+        supabase.from("videos").select(SELECT).eq("creator_id", creatorId).eq("is_active", true).order("created_at", { ascending: false }),
+        supabase.from("video_mirrors").select("video_id").eq("creator_id", creatorId),
+      ]);
       if (e2) throw e2;
 
-      return {
-        target: target as unknown as FeedVideo,
-        list: (list ?? []) as unknown as FeedVideo[],
-      };
+      let rows = (own ?? []) as unknown as (FeedVideo & { created_at: string })[];
+      const mirrorIds = (mirrors ?? []).map((m) => m.video_id).filter((mid) => !rows.some((r) => r.id === mid));
+      if (mirrorIds.length) {
+        const { data: mv } = await supabase.from("videos").select(SELECT).in("id", mirrorIds).eq("is_active", true);
+        rows = [...rows, ...((mv ?? []) as unknown as (FeedVideo & { created_at: string })[])].sort((a, b) =>
+          a.created_at < b.created_at ? 1 : -1
+        );
+      }
+
+      if (!rows.some((r) => r.id === id)) {
+        rows = [target as unknown as FeedVideo & { created_at: string }, ...rows];
+      }
+
+      return { target: target as unknown as FeedVideo, list: rows as unknown as FeedVideo[] };
     },
   });
+
+  const initialIndex = useMemo(() => {
+    if (!data?.target) return 0;
+    const idx = data.list.findIndex((v) => v.id === data.target!.id);
+    return idx < 0 ? 0 : idx;
+  }, [data]);
 
   const { data: inter } = useQuery({
     queryKey: ["interactions", user?.id],
     queryFn: () => fetchUserInteractions(user!.id),
     enabled: !!user,
   });
-
-  // Keep the creator's chronological order; start the feed at the tapped video
-  // so the user can scroll up to the next (newer) or down to the previous (older).
-  const initialIndex = useMemo(() => {
-    if (!data?.target) return 0;
-    const idx = data.list.findIndex((v) => v.id === data.target!.id);
-    return idx < 0 ? 0 : idx;
-  }, [data]);
 
   const ordered = useMemo<FeedVideo[]>(() => (data?.list ?? []) as FeedVideo[], [data]);
 

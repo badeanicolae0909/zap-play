@@ -8,6 +8,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { CaptionText } from "@/components/CaptionText";
 
 import { useAuth } from "@/lib/auth";
 import { haptic, hapticSuccess } from "@/lib/telegram";
@@ -576,7 +577,7 @@ export function VideoCard({
             <span className="text-base font-bold tracking-tight">@{video.creator.username}</span>
           </Link>
         )}
-        {video.caption && <p className="mt-1.5 line-clamp-2 text-sm leading-snug">{video.caption}</p>}
+        {video.caption && <CaptionText text={video.caption} className="mt-1.5 line-clamp-2 text-sm leading-snug" />}
         {video.tags && video.tags.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {video.tags.slice(0, 3).map((t) => (
