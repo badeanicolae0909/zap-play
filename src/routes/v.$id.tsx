@@ -74,6 +74,12 @@ function VideoPage() {
     return idx < 0 ? 0 : idx;
   }, [data]);
 
+  const { data: inter } = useQuery({
+    queryKey: ["interactions", user?.id],
+    queryFn: () => fetchUserInteractions(user!.id),
+    enabled: !!user,
+  });
+
   const ordered = useMemo<FeedVideo[]>(() => (data?.list ?? []) as FeedVideo[], [data]);
 
   return (
@@ -89,8 +95,8 @@ function VideoPage() {
 
       <VideoFeed
         videos={ordered}
-        likedSet={inter(user?.id)?.liked}
-        savedSet={inter(user?.id)?.saved}
+        likedSet={inter?.liked}
+        savedSet={inter?.saved}
         loading={isLoading}
         emptyText="Video not found."
         initialIndex={initialIndex}
@@ -98,9 +104,3 @@ function VideoPage() {
     </main>
   );
 }
-
-function inter(_userId?: string) {
-  return undefined as { liked: Set<string>; saved: Set<string> } | undefined;
-}
-
-export { fetchUserInteractions };
