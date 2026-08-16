@@ -59,6 +59,7 @@ function CreatorCard({
   };
 }) {
   const initials = creator.display_name?.[0]?.toUpperCase() ?? creator.username?.[0]?.toUpperCase() ?? "?";
+  const hasImage = !!creator.avatar_url;
 
   return (
     <Link
@@ -66,48 +67,62 @@ function CreatorCard({
       params={{ username: creator.username }}
       className="group tap-scale relative flex flex-col overflow-hidden rounded-2xl glass shadow-elegant transition hover:shadow-glow"
     >
-      {/* Gradient backdrop */}
-      <div className="absolute inset-0 gradient-primary opacity-20 transition-opacity duration-300 group-hover:opacity-30" />
-      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/60 to-background" />
+      {/* Background image fills the whole card */}
+      <div className="absolute inset-0">
+        {hasImage ? (
+          <img
+            src={creator.avatar_url!}
+            alt={creator.display_name}
+            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+            loading="lazy"
+          />
+        ) : (
+          <div className="h-full w-full gradient-primary" />
+        )}
+      </div>
+
+      {/* Dark overlay so text is readable */}
+      <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/70 to-background/95" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
 
       <div className="relative flex flex-1 flex-col items-center p-5 pt-6">
-        {/* Avatar ring */}
-        <div className="relative h-20 w-20">
-          <div className="absolute -inset-1 rounded-full gradient-primary opacity-70 blur-sm transition duration-300 group-hover:opacity-100" />
+        {/* Small avatar badge — optional, now at top */}
+        <div className="relative h-12 w-12">
+          <div className="absolute -inset-0.5 rounded-full gradient-primary opacity-70 blur-sm transition duration-300 group-hover:opacity-100" />
           <div className="relative h-full w-full overflow-hidden rounded-full border-2 border-background/80 bg-card">
-            {creator.avatar_url ? (
+            {hasImage ? (
               <img
-                src={creator.avatar_url}
+                src={creator.avatar_url!}
                 alt={creator.display_name}
                 className="h-full w-full object-cover"
                 loading="lazy"
               />
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-lg font-bold text-primary-foreground gradient-primary">
+              <div className="flex h-full w-full items-center justify-center text-sm font-bold text-primary-foreground gradient-primary">
                 {initials}
               </div>
             )}
           </div>
         </div>
 
-        <div className="mt-4 w-full text-center">
-          <p className="truncate text-sm font-semibold leading-tight">{creator.display_name}</p>
-          <p className="truncate text-xs text-muted-foreground">@{creator.username}</p>
+        <div className="mt-3 w-full text-center">
+          <p className="truncate text-sm font-semibold leading-tight text-white drop-shadow-sm">{creator.display_name}</p>
+          <p className="truncate text-xs text-white/80 drop-shadow-sm">@{creator.username}</p>
         </div>
 
         {/* Stats row */}
-        <div className="mt-4 flex w-full items-center justify-between gap-1 rounded-xl bg-secondary/40 px-3 py-2 text-[10px] font-medium">
+        <div className="mt-4 flex w-full items-center justify-between gap-1 rounded-xl bg-black/40 px-3 py-2 text-[10px] font-medium text-white backdrop-blur-sm">
           <Stat value={creator.video_count} label="videos" />
-          <div className="h-3 w-px bg-border/50" />
+          <div className="h-3 w-px bg-white/20" />
           <Stat value={creator.like_count} label="likes" />
-          <div className="h-3 w-px bg-border/50" />
+          <div className="h-3 w-px bg-white/20" />
           <Stat value={creator.follower_count} label="fans" />
         </div>
       </div>
 
-      {/* Bottom play hint on hover/active */}
-      <div className="pointer-events-none absolute bottom-3 right-3 flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 opacity-0 transition-opacity duration-300 group-active:opacity-100">
-        <Play className="h-3.5 w-3.5 fill-primary text-primary" />
+      {/* Bottom play hint */}
+      <div className="pointer-events-none absolute bottom-3 right-3 flex h-7 w-7 items-center justify-center rounded-full bg-white/10 opacity-0 transition-opacity duration-300 group-active:opacity-100">
+        <Play className="h-3.5 w-3.5 fill-white text-white" />
       </div>
     </Link>
   );
@@ -117,10 +132,11 @@ function Stat({ value, label }: { value: number; label: string }) {
   return (
     <div className="flex flex-col items-center leading-none">
       <span className="text-[11px] font-bold">{fmt(value)}</span>
-      <span className="mt-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="mt-0.5 text-[9px] uppercase tracking-wide text-white/70">{label}</span>
     </div>
   );
 }
+
 
 function fmt(n: number) {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
