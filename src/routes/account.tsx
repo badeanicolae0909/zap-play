@@ -17,10 +17,8 @@ function Account() {
   if (!user) return null;
 
   async function claimAdmin() {
-    // First-user-admin convenience: allowed by trigger? we don't have one,
-    // so this insert will fail without service role. Provide instructions.
-    const { error } = await supabase.from("user_roles").insert({ user_id: user!.id, role: "admin" });
-    if (error) toast.error("Cannot self-promote. Ask an existing admin or use the database to add your first admin role.");
+    const { data: ok, error } = await supabase.rpc("claim_first_admin");
+    if (error || !ok) toast.error("Admin role already claimed or unavailable.");
     else toast.success("You are now admin");
   }
 

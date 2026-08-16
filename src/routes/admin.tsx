@@ -39,9 +39,9 @@ function AdminPage() {
   async function claimAdmin() {
     if (!user) return;
     setClaiming(true);
-    const { error } = await supabase.from("user_roles").insert({ user_id: user.id, role: "admin" });
+    const { data: ok, error } = await supabase.rpc("claim_first_admin");
     setClaiming(false);
-    if (error) toast.error(error.message);
+    if (error || !ok) toast.error("Admin role already claimed or unavailable.");
     else { toast.success("You are now admin"); window.location.reload(); }
   }
 
