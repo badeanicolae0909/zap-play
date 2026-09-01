@@ -109,7 +109,8 @@ function UploadTab() {
   const [caption, setCaption] = useState("");
   const [mirrors, setMirrors] = useState<string[]>([]);
   const [tags, setTags] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const file = files[0] ?? null;
   const [thumb, setThumb] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState("");
   const [thumbUrl, setThumbUrl] = useState("");
