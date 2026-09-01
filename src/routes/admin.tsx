@@ -119,85 +119,111 @@ function UploadTab() {
   const [progress, setProgress] = useState(0);
   const bunnyCreate = useServerFn(createBunnyUpload);
 
+  async function publishOne(
+    f: File | null,
+    thumbOverride: File | null,
+    onProgress: (p: number) => void
+  ) {
+    let finalVideoUrl = "";
+    let finalThumbUrl: string | null = null;
+
+    if (mode === "file") {
+      if (!f) throw new Error("Pick a video file");
+      const ext = f.name.split(".").pop();
+      const key = `${creatorId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("videos").upload(key, f, { upsert: false, contentType: f.type });
+      if (upErr) throw upErr;
+      onProgress(60);
+      finalVideoUrl = supabase.storage.from("videos").getPublicUrl(key).data.publicUrl;
+      const thumbFile = thumbOverride ?? (await extractVideoThumbnail(f, 5));
+      if (thumbFile) {
+        const tkey = `${creatorId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${(thumbFile.name.split(".").pop() ?? "jpg")}`;
+        await supabase.storage.from("thumbnails").upload(tkey, thumbFile, { contentType: thumbFile.type });
+        finalThumbUrl = supabase.storage.from("thumbnails").getPublicUrl(tkey).data.publicUrl;
+      }
+    } else if (mode === "bunny") {
+      if (!f) throw new Error("Pick a video file");
+      const title = caption?.trim() || f.name;
+      const sig = await bunnyCreate({ data: { title } });
+      onProgress(15);
+      await new Promise<void>((resolve, reject) => {
+        const upload = new tus.Upload(f, {
+          endpoint: "https://video.bunnycdn.com/tusupload",
+          retryDelays: [0, 3000, 5000, 10000, 20000],
+          headers: {
+            AuthorizationSignature: sig.signature,
+            AuthorizationExpire: String(sig.expirationTime),
+            VideoId: sig.guid,
+            LibraryId: sig.libraryId,
+          },
+          metadata: { filetype: f.type, title },
+          onError: (err) => reject(err),
+          onProgress: (sent, total) => onProgress(15 + Math.round((sent / total) * 70)),
+          onSuccess: () => resolve(),
+        });
+        upload.start();
+      });
+      finalVideoUrl = sig.embedUrl;
+      const thumbFile = thumbOverride ?? (await extractVideoThumbnail(f, 5));
+      if (thumbFile) {
+        const tkey = `${creatorId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${(thumbFile.name.split(".").pop() ?? "jpg")}`;
+        await supabase.storage.from("thumbnails").upload(tkey, thumbFile, { contentType: thumbFile.type });
+        finalThumbUrl = supabase.storage.from("thumbnails").getPublicUrl(tkey).data.publicUrl;
+      }
+    } else {
+      if (!videoUrl.trim()) throw new Error("Paste a video URL");
+      try { new URL(videoUrl.trim()); } catch { throw new Error("Invalid URL"); }
+      finalVideoUrl = videoUrl.trim();
+      finalThumbUrl = thumbUrl.trim() || null;
+      onProgress(60);
+    }
+
+    onProgress(85);
+    const { data: inserted, error: insErr } = await supabase.from("videos").insert({
+      creator_id: creatorId,
+      video_url: finalVideoUrl,
+      thumbnail_url: finalThumbUrl,
+      caption: caption || null,
+      is_featured: featured,
+      tags: tags ? tags.split(",").map((t) => t.trim().replace(/^#/, "")).filter(Boolean) : [],
+    }).select("id").single();
+    if (insErr) throw insErr;
+    const mirrorTargets = mirrors.filter((id) => id !== creatorId);
+    if (inserted && mirrorTargets.length) {
+      const { error: mErr } = await supabase.from("video_mirrors").insert(
+        mirrorTargets.map((cid) => ({ video_id: inserted.id, creator_id: cid }))
+      );
+      if (mErr) toast.error(`Mirrors failed: ${mErr.message}`);
+    }
+    onProgress(100);
+    return mirrorTargets.length;
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!creatorId) { toast.error("Pick a creator"); return; }
+    const isFileMode = mode === "file" || mode === "bunny";
+    if (isFileMode && !files.length) { toast.error("Pick at least one video file"); return; }
     setBusy(true); setProgress(10);
     try {
-      let finalVideoUrl = "";
-      let finalThumbUrl: string | null = null;
-
-      if (mode === "file") {
-        if (!file) { toast.error("Pick a video file"); setBusy(false); return; }
-        const ext = file.name.split(".").pop();
-        const key = `${creatorId}/${Date.now()}.${ext}`;
-        const { error: upErr } = await supabase.storage.from("videos").upload(key, file, { upsert: false, contentType: file.type });
-        if (upErr) throw upErr;
-        setProgress(60);
-        finalVideoUrl = supabase.storage.from("videos").getPublicUrl(key).data.publicUrl;
-        const thumbFile = thumb ?? (await extractVideoThumbnail(file, 5));
-        if (thumbFile) {
-          const tkey = `${creatorId}/${Date.now()}.${(thumbFile.name.split(".").pop() ?? "jpg")}`;
-          await supabase.storage.from("thumbnails").upload(tkey, thumbFile, { contentType: thumbFile.type });
-          finalThumbUrl = supabase.storage.from("thumbnails").getPublicUrl(tkey).data.publicUrl;
+      if (isFileMode && files.length > 1) {
+        let ok = 0;
+        for (let i = 0; i < files.length; i++) {
+          try {
+            await publishOne(files[i], null, (p) =>
+              setProgress(Math.round(((i + p / 100) / files.length) * 100))
+            );
+            ok++;
+          } catch (err) {
+            toast.error(`${files[i].name}: ${(err as Error).message}`);
+          }
         }
-      } else if (mode === "bunny") {
-        if (!file) { toast.error("Pick a video file"); setBusy(false); return; }
-        const title = caption?.trim() || file.name;
-        const sig = await bunnyCreate({ data: { title } });
-        setProgress(15);
-        await new Promise<void>((resolve, reject) => {
-          const upload = new tus.Upload(file, {
-            endpoint: "https://video.bunnycdn.com/tusupload",
-            retryDelays: [0, 3000, 5000, 10000, 20000],
-            headers: {
-              AuthorizationSignature: sig.signature,
-              AuthorizationExpire: String(sig.expirationTime),
-              VideoId: sig.guid,
-              LibraryId: sig.libraryId,
-            },
-            metadata: { filetype: file.type, title },
-            onError: (err) => reject(err),
-            onProgress: (sent, total) => setProgress(15 + Math.round((sent / total) * 70)),
-            onSuccess: () => resolve(),
-          });
-          upload.start();
-        });
-        finalVideoUrl = sig.embedUrl;
-        const thumbFile = thumb ?? (await extractVideoThumbnail(file, 5));
-        if (thumbFile) {
-          const tkey = `${creatorId}/${Date.now()}.${(thumbFile.name.split(".").pop() ?? "jpg")}`;
-          await supabase.storage.from("thumbnails").upload(tkey, thumbFile, { contentType: thumbFile.type });
-          finalThumbUrl = supabase.storage.from("thumbnails").getPublicUrl(tkey).data.publicUrl;
-        }
+        toast.success(`Published ${ok} of ${files.length} videos`);
       } else {
-        if (!videoUrl.trim()) { toast.error("Paste a video URL"); setBusy(false); return; }
-        try { new URL(videoUrl.trim()); } catch { toast.error("Invalid URL"); setBusy(false); return; }
-        finalVideoUrl = videoUrl.trim();
-        finalThumbUrl = thumbUrl.trim() || null;
-        setProgress(60);
+        const mirrorCount = await publishOne(isFileMode ? files[0] : null, thumb, setProgress);
+        toast.success(mirrorCount ? `Video published on ${mirrorCount + 1} profiles` : "Video published");
       }
-
-      setProgress(85);
-      const { data: inserted, error: insErr } = await supabase.from("videos").insert({
-        creator_id: creatorId,
-        video_url: finalVideoUrl,
-        thumbnail_url: finalThumbUrl,
-        caption: caption || null,
-        is_featured: featured,
-        tags: tags ? tags.split(",").map((t) => t.trim().replace(/^#/, "")).filter(Boolean) : [],
-      }).select("id").single();
-      if (insErr) throw insErr;
-      const mirrorTargets = mirrors.filter((id) => id !== creatorId);
-      if (inserted && mirrorTargets.length) {
-        const { error: mErr } = await supabase.from("video_mirrors").insert(
-          mirrorTargets.map((cid) => ({ video_id: inserted.id, creator_id: cid }))
-        );
-        if (mErr) toast.error(`Mirrors failed: ${mErr.message}`);
-      }
-      setProgress(100);
-      toast.success(mirrorTargets.length ? `Video published on ${mirrorTargets.length + 1} profiles` : "Video published");
-      setFile(null); setThumb(null); setVideoUrl(""); setThumbUrl(""); setCaption(""); setTags(""); setFeatured(false); setMirrors([]);
+      setFiles([]); setThumb(null); setVideoUrl(""); setThumbUrl(""); setCaption(""); setTags(""); setFeatured(false); setMirrors([]);
       qc.invalidateQueries({ queryKey: ["feed"] });
       qc.invalidateQueries({ queryKey: ["admin-videos"] });
     } catch (err) {
