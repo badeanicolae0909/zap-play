@@ -28,7 +28,7 @@ export const Route = createFileRoute("/admin")({
 });
 
 function AdminPage() {
-  const { user, isAdmin, isAnonymous, loading } = useAuth();
+  const { isAdmin, loading } = useAuth();
   const search = Route.useSearch();
   const [tab, setTab] = useState<"upload" | "videos" | "creators">(search.tab ?? (search.edit ? "videos" : "upload"));
 
