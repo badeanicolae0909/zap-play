@@ -307,7 +307,7 @@ function UploadTab() {
         </div>
       )}
       <Button type="submit" disabled={busy} className="h-12 w-full rounded-xl gradient-primary text-base font-semibold text-primary-foreground">
-        {busy ? "Publishing…" : "Publish video"}
+        {busy ? "Publishing…" : files.length > 1 ? `Publish ${files.length} videos` : "Publish video"}
       </Button>
 
       <BunkrImport creators={creators ?? []} />
