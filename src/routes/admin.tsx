@@ -430,6 +430,49 @@ function FileDrop({ label, accept, file, onFile }: { label: string; accept: stri
   );
 }
 
+function MultiFileDrop({ label, files, onFiles }: { label: string; files: File[]; onFiles: (f: File[]) => void }) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      <label className="flex h-24 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-border glass text-sm text-muted-foreground hover:border-primary">
+        <input
+          type="file"
+          accept="video/*"
+          multiple
+          className="hidden"
+          onChange={(e) => onFiles([...files, ...Array.from(e.target.files ?? [])])}
+        />
+        {files.length ? (
+          <span className="px-4 text-foreground">{files.length} file{files.length === 1 ? "" : "s"} selected — tap to add more</span>
+        ) : (
+          <span>Tap to choose one or more videos</span>
+        )}
+      </label>
+      {files.length > 0 && (
+        <ul className="space-y-1 rounded-xl glass p-2">
+          {files.map((f, i) => (
+            <li key={`${f.name}-${i}`} className="flex items-center gap-2 text-xs">
+              <span className="flex-1 truncate">{f.name}</span>
+              <button
+                type="button"
+                onClick={() => onFiles(files.filter((_, j) => j !== i))}
+                className="rounded-md px-2 py-0.5 text-muted-foreground hover:text-destructive"
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+          <li>
+            <button type="button" onClick={() => onFiles([])} className="px-2 py-0.5 text-[11px] text-muted-foreground underline">
+              Clear all
+            </button>
+          </li>
+        </ul>
+      )}
+    </div>
+  );
+}
+
 type AdminVideoRow = {
   id: string;
   caption: string | null;
