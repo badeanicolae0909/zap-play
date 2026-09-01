@@ -249,13 +249,13 @@ function UploadTab() {
 
       {mode === "file" ? (
         <>
-          <FileDrop label="Video file (MP4)" accept="video/*" onFile={setFile} file={file} />
-          <FileDrop label="Thumbnail (optional)" accept="image/*" onFile={setThumb} file={thumb} />
+          <MultiFileDrop label="Video files (MP4) — select multiple" files={files} onFiles={setFiles} />
+          {files.length <= 1 && <FileDrop label="Thumbnail (optional)" accept="image/*" onFile={setThumb} file={thumb} />}
         </>
       ) : mode === "bunny" ? (
         <>
-          <FileDrop label="Video file → Bunny Stream" accept="video/*" onFile={setFile} file={file} />
-          <FileDrop label="Thumbnail (optional)" accept="image/*" onFile={setThumb} file={thumb} />
+          <MultiFileDrop label="Video files → Bunny Stream — select multiple" files={files} onFiles={setFiles} />
+          {files.length <= 1 && <FileDrop label="Thumbnail (optional)" accept="image/*" onFile={setThumb} file={thumb} />}
           <p className="text-[11px] text-muted-foreground">Uploads directly to Bunny Stream via secure TUS (API key stays on the server). The video plays through the Bunny iframe player.</p>
         </>
       ) : (
