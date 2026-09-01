@@ -28,41 +28,17 @@ export const Route = createFileRoute("/admin")({
 });
 
 function AdminPage() {
-  const { user, isAdmin, isAnonymous, loading } = useAuth();
+  const { isAdmin, loading } = useAuth();
   const search = Route.useSearch();
   const [tab, setTab] = useState<"upload" | "videos" | "creators">(search.tab ?? (search.edit ? "videos" : "upload"));
 
-  const [claiming, setClaiming] = useState(false);
-
   if (loading) return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Loading…</div>;
-
-  async function claimAdmin() {
-    if (!user) return;
-    setClaiming(true);
-    const { data: ok, error } = await supabase.rpc("claim_first_admin");
-    setClaiming(false);
-    if (error || !ok) toast.error("Admin role already claimed or unavailable.");
-    else { toast.success("You are now admin"); window.location.reload(); }
-  }
 
   if (!isAdmin) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl gradient-primary glow">
-          <Shield className="h-8 w-8 text-primary-foreground" />
-        </div>
-        <h1 className="text-xl font-bold">Admin access</h1>
-        <p className="max-w-xs text-sm text-muted-foreground">
-          Claim the admin role for this app. Only works if no admin exists yet.
-        </p>
-        <Button disabled={claiming || !user} onClick={claimAdmin} className="rounded-full gradient-primary px-6 py-3 text-sm font-semibold text-primary-foreground">
-          {claiming ? "Claiming…" : "Claim admin role"}
-        </Button>
-        {isAnonymous && (
-          <p className="max-w-xs text-[11px] text-muted-foreground">
-            Tip: you can also sign in with email first via <Link to="/login" className="underline">/login</Link> to keep your admin role across devices.
-          </p>
-        )}
+        <h1 className="text-7xl font-bold text-gradient">404</h1>
+        <h2 className="text-xl font-semibold">Page not found</h2>
         <Link to="/" className="text-xs text-muted-foreground">← Back to feed</Link>
       </main>
     );

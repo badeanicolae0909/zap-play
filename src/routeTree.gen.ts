@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SysAccessRouteImport } from './routes/sys-access'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as SavedRouteImport } from './routes/saved'
 import { Route as LoginRouteImport } from './routes/login'
@@ -19,6 +20,11 @@ import { Route as VIdRouteImport } from './routes/v.$id'
 import { Route as CreatorUsernameRouteImport } from './routes/creator.$username'
 import { Route as ApiPublicTelegramWebhookRouteImport } from './routes/api/public/telegram.webhook'
 
+const SysAccessRoute = SysAccessRouteImport.update({
+  id: '/sys-access',
+  path: '/sys-access',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SearchRoute = SearchRouteImport.update({
   id: '/search',
   path: '/search',
@@ -73,6 +79,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/saved': typeof SavedRoute
   '/search': typeof SearchRoute
+  '/sys-access': typeof SysAccessRoute
   '/creator/$username': typeof CreatorUsernameRoute
   '/v/$id': typeof VIdRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
@@ -84,6 +91,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/saved': typeof SavedRoute
   '/search': typeof SearchRoute
+  '/sys-access': typeof SysAccessRoute
   '/creator/$username': typeof CreatorUsernameRoute
   '/v/$id': typeof VIdRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
@@ -96,6 +104,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/saved': typeof SavedRoute
   '/search': typeof SearchRoute
+  '/sys-access': typeof SysAccessRoute
   '/creator/$username': typeof CreatorUsernameRoute
   '/v/$id': typeof VIdRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
@@ -109,6 +118,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/saved'
     | '/search'
+    | '/sys-access'
     | '/creator/$username'
     | '/v/$id'
     | '/api/public/telegram/webhook'
@@ -120,6 +130,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/saved'
     | '/search'
+    | '/sys-access'
     | '/creator/$username'
     | '/v/$id'
     | '/api/public/telegram/webhook'
@@ -131,6 +142,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/saved'
     | '/search'
+    | '/sys-access'
     | '/creator/$username'
     | '/v/$id'
     | '/api/public/telegram/webhook'
@@ -143,6 +155,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   SavedRoute: typeof SavedRoute
   SearchRoute: typeof SearchRoute
+  SysAccessRoute: typeof SysAccessRoute
   CreatorUsernameRoute: typeof CreatorUsernameRoute
   VIdRoute: typeof VIdRoute
   ApiPublicTelegramWebhookRoute: typeof ApiPublicTelegramWebhookRoute
@@ -150,6 +163,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sys-access': {
+      id: '/sys-access'
+      path: '/sys-access'
+      fullPath: '/sys-access'
+      preLoaderRoute: typeof SysAccessRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/search': {
       id: '/search'
       path: '/search'
@@ -223,6 +243,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   SavedRoute: SavedRoute,
   SearchRoute: SearchRoute,
+  SysAccessRoute: SysAccessRoute,
   CreatorUsernameRoute: CreatorUsernameRoute,
   VIdRoute: VIdRoute,
   ApiPublicTelegramWebhookRoute: ApiPublicTelegramWebhookRoute,
