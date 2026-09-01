@@ -52,15 +52,17 @@ export function BottomNav() {
             </Link>
           );
         })}
-        <Link
-          to="/admin"
-          search={{ tab: undefined, edit: undefined }}
-          onClick={() => haptic("light")}
-          className="tap-scale relative flex flex-1 items-center justify-center rounded-full px-2 py-1.5"
-          aria-label={isAdmin ? "Admin" : "Claim admin"}
-        >
-          <Shield className={`h-4 w-4 ${pathname.startsWith("/admin") ? "text-primary" : "text-muted-foreground"}`} strokeWidth={isAdmin ? 2.5 : 2} />
-        </Link>
+        {isAdmin && (
+          <Link
+            to="/admin"
+            search={{ tab: undefined, edit: undefined }}
+            onClick={() => haptic("light")}
+            className="tap-scale relative flex flex-1 items-center justify-center rounded-full px-2 py-1.5"
+            aria-label="Admin"
+          >
+            <Shield className={`h-4 w-4 ${pathname.startsWith("/admin") ? "text-primary" : "text-muted-foreground"}`} strokeWidth={2.5} />
+          </Link>
+        )}
       </div>
     </nav>
   );
