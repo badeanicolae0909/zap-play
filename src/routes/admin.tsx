@@ -109,7 +109,8 @@ function UploadTab() {
   const [caption, setCaption] = useState("");
   const [mirrors, setMirrors] = useState<string[]>([]);
   const [tags, setTags] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  
   const [thumb, setThumb] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState("");
   const [thumbUrl, setThumbUrl] = useState("");
@@ -118,85 +119,111 @@ function UploadTab() {
   const [progress, setProgress] = useState(0);
   const bunnyCreate = useServerFn(createBunnyUpload);
 
+  async function publishOne(
+    f: File | null,
+    thumbOverride: File | null,
+    onProgress: (p: number) => void
+  ) {
+    let finalVideoUrl = "";
+    let finalThumbUrl: string | null = null;
+
+    if (mode === "file") {
+      if (!f) throw new Error("Pick a video file");
+      const ext = f.name.split(".").pop();
+      const key = `${creatorId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("videos").upload(key, f, { upsert: false, contentType: f.type });
+      if (upErr) throw upErr;
+      onProgress(60);
+      finalVideoUrl = supabase.storage.from("videos").getPublicUrl(key).data.publicUrl;
+      const thumbFile = thumbOverride ?? (await extractVideoThumbnail(f, 5));
+      if (thumbFile) {
+        const tkey = `${creatorId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${(thumbFile.name.split(".").pop() ?? "jpg")}`;
+        await supabase.storage.from("thumbnails").upload(tkey, thumbFile, { contentType: thumbFile.type });
+        finalThumbUrl = supabase.storage.from("thumbnails").getPublicUrl(tkey).data.publicUrl;
+      }
+    } else if (mode === "bunny") {
+      if (!f) throw new Error("Pick a video file");
+      const title = caption?.trim() || f.name;
+      const sig = await bunnyCreate({ data: { title } });
+      onProgress(15);
+      await new Promise<void>((resolve, reject) => {
+        const upload = new tus.Upload(f, {
+          endpoint: "https://video.bunnycdn.com/tusupload",
+          retryDelays: [0, 3000, 5000, 10000, 20000],
+          headers: {
+            AuthorizationSignature: sig.signature,
+            AuthorizationExpire: String(sig.expirationTime),
+            VideoId: sig.guid,
+            LibraryId: sig.libraryId,
+          },
+          metadata: { filetype: f.type, title },
+          onError: (err) => reject(err),
+          onProgress: (sent, total) => onProgress(15 + Math.round((sent / total) * 70)),
+          onSuccess: () => resolve(),
+        });
+        upload.start();
+      });
+      finalVideoUrl = sig.embedUrl;
+      const thumbFile = thumbOverride ?? (await extractVideoThumbnail(f, 5));
+      if (thumbFile) {
+        const tkey = `${creatorId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${(thumbFile.name.split(".").pop() ?? "jpg")}`;
+        await supabase.storage.from("thumbnails").upload(tkey, thumbFile, { contentType: thumbFile.type });
+        finalThumbUrl = supabase.storage.from("thumbnails").getPublicUrl(tkey).data.publicUrl;
+      }
+    } else {
+      if (!videoUrl.trim()) throw new Error("Paste a video URL");
+      try { new URL(videoUrl.trim()); } catch { throw new Error("Invalid URL"); }
+      finalVideoUrl = videoUrl.trim();
+      finalThumbUrl = thumbUrl.trim() || null;
+      onProgress(60);
+    }
+
+    onProgress(85);
+    const { data: inserted, error: insErr } = await supabase.from("videos").insert({
+      creator_id: creatorId,
+      video_url: finalVideoUrl,
+      thumbnail_url: finalThumbUrl,
+      caption: caption || null,
+      is_featured: featured,
+      tags: tags ? tags.split(",").map((t) => t.trim().replace(/^#/, "")).filter(Boolean) : [],
+    }).select("id").single();
+    if (insErr) throw insErr;
+    const mirrorTargets = mirrors.filter((id) => id !== creatorId);
+    if (inserted && mirrorTargets.length) {
+      const { error: mErr } = await supabase.from("video_mirrors").insert(
+        mirrorTargets.map((cid) => ({ video_id: inserted.id, creator_id: cid }))
+      );
+      if (mErr) toast.error(`Mirrors failed: ${mErr.message}`);
+    }
+    onProgress(100);
+    return mirrorTargets.length;
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!creatorId) { toast.error("Pick a creator"); return; }
+    const isFileMode = mode === "file" || mode === "bunny";
+    if (isFileMode && !files.length) { toast.error("Pick at least one video file"); return; }
     setBusy(true); setProgress(10);
     try {
-      let finalVideoUrl = "";
-      let finalThumbUrl: string | null = null;
-
-      if (mode === "file") {
-        if (!file) { toast.error("Pick a video file"); setBusy(false); return; }
-        const ext = file.name.split(".").pop();
-        const key = `${creatorId}/${Date.now()}.${ext}`;
-        const { error: upErr } = await supabase.storage.from("videos").upload(key, file, { upsert: false, contentType: file.type });
-        if (upErr) throw upErr;
-        setProgress(60);
-        finalVideoUrl = supabase.storage.from("videos").getPublicUrl(key).data.publicUrl;
-        const thumbFile = thumb ?? (await extractVideoThumbnail(file, 5));
-        if (thumbFile) {
-          const tkey = `${creatorId}/${Date.now()}.${(thumbFile.name.split(".").pop() ?? "jpg")}`;
-          await supabase.storage.from("thumbnails").upload(tkey, thumbFile, { contentType: thumbFile.type });
-          finalThumbUrl = supabase.storage.from("thumbnails").getPublicUrl(tkey).data.publicUrl;
+      if (isFileMode && files.length > 1) {
+        let ok = 0;
+        for (let i = 0; i < files.length; i++) {
+          try {
+            await publishOne(files[i], null, (p) =>
+              setProgress(Math.round(((i + p / 100) / files.length) * 100))
+            );
+            ok++;
+          } catch (err) {
+            toast.error(`${files[i].name}: ${(err as Error).message}`);
+          }
         }
-      } else if (mode === "bunny") {
-        if (!file) { toast.error("Pick a video file"); setBusy(false); return; }
-        const title = caption?.trim() || file.name;
-        const sig = await bunnyCreate({ data: { title } });
-        setProgress(15);
-        await new Promise<void>((resolve, reject) => {
-          const upload = new tus.Upload(file, {
-            endpoint: "https://video.bunnycdn.com/tusupload",
-            retryDelays: [0, 3000, 5000, 10000, 20000],
-            headers: {
-              AuthorizationSignature: sig.signature,
-              AuthorizationExpire: String(sig.expirationTime),
-              VideoId: sig.guid,
-              LibraryId: sig.libraryId,
-            },
-            metadata: { filetype: file.type, title },
-            onError: (err) => reject(err),
-            onProgress: (sent, total) => setProgress(15 + Math.round((sent / total) * 70)),
-            onSuccess: () => resolve(),
-          });
-          upload.start();
-        });
-        finalVideoUrl = sig.embedUrl;
-        const thumbFile = thumb ?? (await extractVideoThumbnail(file, 5));
-        if (thumbFile) {
-          const tkey = `${creatorId}/${Date.now()}.${(thumbFile.name.split(".").pop() ?? "jpg")}`;
-          await supabase.storage.from("thumbnails").upload(tkey, thumbFile, { contentType: thumbFile.type });
-          finalThumbUrl = supabase.storage.from("thumbnails").getPublicUrl(tkey).data.publicUrl;
-        }
+        toast.success(`Published ${ok} of ${files.length} videos`);
       } else {
-        if (!videoUrl.trim()) { toast.error("Paste a video URL"); setBusy(false); return; }
-        try { new URL(videoUrl.trim()); } catch { toast.error("Invalid URL"); setBusy(false); return; }
-        finalVideoUrl = videoUrl.trim();
-        finalThumbUrl = thumbUrl.trim() || null;
-        setProgress(60);
+        const mirrorCount = await publishOne(isFileMode ? files[0] : null, thumb, setProgress);
+        toast.success(mirrorCount ? `Video published on ${mirrorCount + 1} profiles` : "Video published");
       }
-
-      setProgress(85);
-      const { data: inserted, error: insErr } = await supabase.from("videos").insert({
-        creator_id: creatorId,
-        video_url: finalVideoUrl,
-        thumbnail_url: finalThumbUrl,
-        caption: caption || null,
-        is_featured: featured,
-        tags: tags ? tags.split(",").map((t) => t.trim().replace(/^#/, "")).filter(Boolean) : [],
-      }).select("id").single();
-      if (insErr) throw insErr;
-      const mirrorTargets = mirrors.filter((id) => id !== creatorId);
-      if (inserted && mirrorTargets.length) {
-        const { error: mErr } = await supabase.from("video_mirrors").insert(
-          mirrorTargets.map((cid) => ({ video_id: inserted.id, creator_id: cid }))
-        );
-        if (mErr) toast.error(`Mirrors failed: ${mErr.message}`);
-      }
-      setProgress(100);
-      toast.success(mirrorTargets.length ? `Video published on ${mirrorTargets.length + 1} profiles` : "Video published");
-      setFile(null); setThumb(null); setVideoUrl(""); setThumbUrl(""); setCaption(""); setTags(""); setFeatured(false); setMirrors([]);
+      setFiles([]); setThumb(null); setVideoUrl(""); setThumbUrl(""); setCaption(""); setTags(""); setFeatured(false); setMirrors([]);
       qc.invalidateQueries({ queryKey: ["feed"] });
       qc.invalidateQueries({ queryKey: ["admin-videos"] });
     } catch (err) {
@@ -222,13 +249,13 @@ function UploadTab() {
 
       {mode === "file" ? (
         <>
-          <FileDrop label="Video file (MP4)" accept="video/*" onFile={setFile} file={file} />
-          <FileDrop label="Thumbnail (optional)" accept="image/*" onFile={setThumb} file={thumb} />
+          <MultiFileDrop label="Video files (MP4) — select multiple" files={files} onFiles={setFiles} />
+          {files.length <= 1 && <FileDrop label="Thumbnail (optional)" accept="image/*" onFile={setThumb} file={thumb} />}
         </>
       ) : mode === "bunny" ? (
         <>
-          <FileDrop label="Video file → Bunny Stream" accept="video/*" onFile={setFile} file={file} />
-          <FileDrop label="Thumbnail (optional)" accept="image/*" onFile={setThumb} file={thumb} />
+          <MultiFileDrop label="Video files → Bunny Stream — select multiple" files={files} onFiles={setFiles} />
+          {files.length <= 1 && <FileDrop label="Thumbnail (optional)" accept="image/*" onFile={setThumb} file={thumb} />}
           <p className="text-[11px] text-muted-foreground">Uploads directly to Bunny Stream via secure TUS (API key stays on the server). The video plays through the Bunny iframe player.</p>
         </>
       ) : (
@@ -280,7 +307,7 @@ function UploadTab() {
         </div>
       )}
       <Button type="submit" disabled={busy} className="h-12 w-full rounded-xl gradient-primary text-base font-semibold text-primary-foreground">
-        {busy ? "Publishing…" : "Publish video"}
+        {busy ? "Publishing…" : files.length > 1 ? `Publish ${files.length} videos` : "Publish video"}
       </Button>
 
       <BunkrImport creators={creators ?? []} />
@@ -399,6 +426,49 @@ function FileDrop({ label, accept, file, onFile }: { label: string; accept: stri
         <input type="file" accept={accept} className="hidden" onChange={(e) => onFile(e.target.files?.[0] ?? null)} />
         {file ? <span className="truncate px-4 text-foreground">{file.name}</span> : <span>Tap to choose</span>}
       </label>
+    </div>
+  );
+}
+
+function MultiFileDrop({ label, files, onFiles }: { label: string; files: File[]; onFiles: (f: File[]) => void }) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      <label className="flex h-24 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-border glass text-sm text-muted-foreground hover:border-primary">
+        <input
+          type="file"
+          accept="video/*"
+          multiple
+          className="hidden"
+          onChange={(e) => onFiles([...files, ...Array.from(e.target.files ?? [])])}
+        />
+        {files.length ? (
+          <span className="px-4 text-foreground">{files.length} file{files.length === 1 ? "" : "s"} selected — tap to add more</span>
+        ) : (
+          <span>Tap to choose one or more videos</span>
+        )}
+      </label>
+      {files.length > 0 && (
+        <ul className="space-y-1 rounded-xl glass p-2">
+          {files.map((f, i) => (
+            <li key={`${f.name}-${i}`} className="flex items-center gap-2 text-xs">
+              <span className="flex-1 truncate">{f.name}</span>
+              <button
+                type="button"
+                onClick={() => onFiles(files.filter((_, j) => j !== i))}
+                className="rounded-md px-2 py-0.5 text-muted-foreground hover:text-destructive"
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+          <li>
+            <button type="button" onClick={() => onFiles([])} className="px-2 py-0.5 text-[11px] text-muted-foreground underline">
+              Clear all
+            </button>
+          </li>
+        </ul>
+      )}
     </div>
   );
 }
