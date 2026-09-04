@@ -102,6 +102,9 @@ export function VideoCard({
   }, [active, resolvedSrc, isEmbed, video.id, video.thumbnail_url, pool, poolSlot]);
 
   const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [buffered, setBuffered] = useState(0);
   const [paused, setPaused] = useState(false);
   const [liked, setLiked] = useState(!!initialLiked);
   const [saved, setSaved] = useState(!!initialSaved);
@@ -110,6 +113,7 @@ export function VideoCard({
   const [scrubbing, setScrubbing] = useState(false);
   const [seekIndicator, setSeekIndicator] = useState<{ dir: 1 | -1; speed: number } | null>(null);
   const [controlsVisible, setControlsVisible] = useState(true);
+
   const { user, isAdmin } = useAuth();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -132,14 +136,27 @@ export function VideoCard({
 
   useEffect(() => {
     if (!active || !videoMounted) return;
+    let raf = 0;
     const tick = () => {
       const el = pool.slots[poolSlot].el;
-      if (scrubbing || isSeekingRef.current || !el.duration) return;
-      setProgress((el.currentTime / el.duration) * 100);
+      const dur = el.duration || 0;
+      if (dur) {
+        setDuration(dur);
+        if (!scrubbing && !isSeekingRef.current) {
+          setProgress((el.currentTime / dur) * 100);
+          setCurrentTime(el.currentTime);
+        }
+        try {
+          const b = el.buffered;
+          if (b.length) setBuffered((b.end(b.length - 1) / dur) * 100);
+        } catch { /* ignore */ }
+      }
+      raf = requestAnimationFrame(tick);
     };
-    const id = setInterval(tick, 250);
-    return () => clearInterval(id);
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
   }, [active, videoMounted, pool, poolSlot, scrubbing]);
+
 
   function showControls() {
     setControlsVisible(true);
