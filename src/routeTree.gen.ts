@@ -12,7 +12,6 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SysAccessRouteImport } from './routes/sys-access'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as SavedRouteImport } from './routes/saved'
-import { Route as LoginRouteImport } from './routes/login'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as IndexRouteImport } from './routes/index'
@@ -33,11 +32,6 @@ const SearchRoute = SearchRouteImport.update({
 const SavedRoute = SavedRouteImport.update({
   id: '/saved',
   path: '/saved',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -76,7 +70,6 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
   '/admin': typeof AdminRoute
-  '/login': typeof LoginRoute
   '/saved': typeof SavedRoute
   '/search': typeof SearchRoute
   '/sys-access': typeof SysAccessRoute
@@ -88,7 +81,6 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
   '/admin': typeof AdminRoute
-  '/login': typeof LoginRoute
   '/saved': typeof SavedRoute
   '/search': typeof SearchRoute
   '/sys-access': typeof SysAccessRoute
@@ -101,7 +93,6 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
   '/admin': typeof AdminRoute
-  '/login': typeof LoginRoute
   '/saved': typeof SavedRoute
   '/search': typeof SearchRoute
   '/sys-access': typeof SysAccessRoute
@@ -115,7 +106,6 @@ export interface FileRouteTypes {
     | '/'
     | '/account'
     | '/admin'
-    | '/login'
     | '/saved'
     | '/search'
     | '/sys-access'
@@ -127,7 +117,6 @@ export interface FileRouteTypes {
     | '/'
     | '/account'
     | '/admin'
-    | '/login'
     | '/saved'
     | '/search'
     | '/sys-access'
@@ -139,7 +128,6 @@ export interface FileRouteTypes {
     | '/'
     | '/account'
     | '/admin'
-    | '/login'
     | '/saved'
     | '/search'
     | '/sys-access'
@@ -152,7 +140,6 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AccountRoute: typeof AccountRoute
   AdminRoute: typeof AdminRoute
-  LoginRoute: typeof LoginRoute
   SavedRoute: typeof SavedRoute
   SearchRoute: typeof SearchRoute
   SysAccessRoute: typeof SysAccessRoute
@@ -182,13 +169,6 @@ declare module '@tanstack/react-router' {
       path: '/saved'
       fullPath: '/saved'
       preLoaderRoute: typeof SavedRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -240,7 +220,6 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountRoute: AccountRoute,
   AdminRoute: AdminRoute,
-  LoginRoute: LoginRoute,
   SavedRoute: SavedRoute,
   SearchRoute: SearchRoute,
   SysAccessRoute: SysAccessRoute,

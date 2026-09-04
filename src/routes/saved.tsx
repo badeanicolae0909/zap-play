@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
@@ -11,7 +11,6 @@ export const Route = createFileRoute("/saved")({ component: Saved });
 
 function Saved() {
   const { user } = useAuth();
-  const nav = useNavigate();
   useEffect(() => { if (user === null) {} }, [user]);
 
   const { data, isLoading } = useQuery({
@@ -31,8 +30,7 @@ function Saved() {
   if (!user) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 pb-32">
-        <p className="text-muted-foreground">Sign in to view saved videos</p>
-        <button onClick={() => nav({ to: "/login" })} className="rounded-full gradient-primary px-5 py-2 text-sm font-semibold text-primary-foreground">Sign in</button>
+        <p className="text-muted-foreground">Preparing your session…</p>
         <BottomNav />
       </main>
     );

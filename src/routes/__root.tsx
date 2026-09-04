@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { AuthProvider } from "@/lib/auth";
 import { initTelegram } from "@/lib/telegram";
 import { Toaster } from "@/components/ui/sonner";
+import { SecretAdminEntry } from "@/components/SecretAdminEntry";
 
 function NotFoundComponent() {
   return (
