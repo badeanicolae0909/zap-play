@@ -14,6 +14,7 @@ import { AuthProvider } from "@/lib/auth";
 import { initTelegram } from "@/lib/telegram";
 import { Toaster } from "@/components/ui/sonner";
 import { SecretAdminEntry } from "@/components/SecretAdminEntry";
+import { TelegramBackButton } from "@/components/TelegramBackButton";
 
 function NotFoundComponent() {
   return (
