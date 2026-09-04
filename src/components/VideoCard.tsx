@@ -136,14 +136,27 @@ export function VideoCard({
 
   useEffect(() => {
     if (!active || !videoMounted) return;
+    let raf = 0;
     const tick = () => {
       const el = pool.slots[poolSlot].el;
-      if (scrubbing || isSeekingRef.current || !el.duration) return;
-      setProgress((el.currentTime / el.duration) * 100);
+      const dur = el.duration || 0;
+      if (dur) {
+        setDuration(dur);
+        if (!scrubbing && !isSeekingRef.current) {
+          setProgress((el.currentTime / dur) * 100);
+          setCurrentTime(el.currentTime);
+        }
+        try {
+          const b = el.buffered;
+          if (b.length) setBuffered((b.end(b.length - 1) / dur) * 100);
+        } catch { /* ignore */ }
+      }
+      raf = requestAnimationFrame(tick);
     };
-    const id = setInterval(tick, 250);
-    return () => clearInterval(id);
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
   }, [active, videoMounted, pool, poolSlot, scrubbing]);
+
 
   function showControls() {
     setControlsVisible(true);
