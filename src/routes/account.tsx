@@ -4,8 +4,6 @@ import { Button } from "@/components/ui/button";
 import { BottomNav } from "@/components/BottomNav";
 import { Link } from "@tanstack/react-router";
 import { LogOut, Shield, Sparkles } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
 import { useEffect } from "react";
 
 export const Route = createFileRoute("/account")({ component: Account });
@@ -16,11 +14,6 @@ function Account() {
   useEffect(() => { if (!user) nav({ to: "/" }); }, [user, nav]);
   if (!user) return null;
 
-  async function claimAdmin() {
-    const { data: ok, error } = await supabase.rpc("claim_first_admin");
-    if (error || !ok) toast.error("Admin role already claimed or unavailable.");
-    else toast.success("You are now admin");
-  }
 
   return (
     <main className="min-h-screen bg-background pb-32 pt-[max(env(safe-area-inset-top),16px)]">
@@ -51,11 +44,6 @@ function Account() {
                 <Shield className="h-4 w-4 text-muted-foreground" />
               </div>
             </Link>
-          )}
-          {!isAdmin && (
-            <button onClick={claimAdmin} className="block w-full text-left tap-scale rounded-2xl glass p-4 text-sm text-muted-foreground">
-              Become admin (first user only)
-            </button>
           )}
           <Button onClick={async () => { await signOut(); nav({ to: "/" }); }} variant="ghost" className="w-full rounded-2xl py-6 text-destructive">
             <LogOut className="mr-2 h-4 w-4" /> Sign out
