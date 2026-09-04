@@ -89,6 +89,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <Outlet />
+        <TelegramBackButton />
         <SecretAdminEntry />
         <Toaster theme="dark" position="top-center" />
       </AuthProvider>
