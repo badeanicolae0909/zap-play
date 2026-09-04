@@ -102,6 +102,9 @@ export function VideoCard({
   }, [active, resolvedSrc, isEmbed, video.id, video.thumbnail_url, pool, poolSlot]);
 
   const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [buffered, setBuffered] = useState(0);
   const [paused, setPaused] = useState(false);
   const [liked, setLiked] = useState(!!initialLiked);
   const [saved, setSaved] = useState(!!initialSaved);
@@ -110,6 +113,7 @@ export function VideoCard({
   const [scrubbing, setScrubbing] = useState(false);
   const [seekIndicator, setSeekIndicator] = useState<{ dir: 1 | -1; speed: number } | null>(null);
   const [controlsVisible, setControlsVisible] = useState(true);
+
   const { user, isAdmin } = useAuth();
   const navigate = useNavigate();
   const qc = useQueryClient();
