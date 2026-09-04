@@ -13,7 +13,7 @@ export const Route = createFileRoute("/account")({ component: Account });
 function Account() {
   const { user, isAdmin, signOut } = useAuth();
   const nav = useNavigate();
-  useEffect(() => { if (!user) nav({ to: "/login" }); }, [user, nav]);
+  useEffect(() => { if (!user) nav({ to: "/" }); }, [user, nav]);
   if (!user) return null;
 
   async function claimAdmin() {

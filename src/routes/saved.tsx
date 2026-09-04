@@ -11,7 +11,6 @@ export const Route = createFileRoute("/saved")({ component: Saved });
 
 function Saved() {
   const { user } = useAuth();
-  const nav = useNavigate();
   useEffect(() => { if (user === null) {} }, [user]);
 
   const { data, isLoading } = useQuery({
