@@ -83,14 +83,24 @@
   .glass {
     background: oklch(0.12 0.02 280 / 60%);
     backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
     border: 1px solid oklch(1 0 0 / 8%);
   }
   .glass-strong {
     background: oklch(0.1 0.02 280 / 80%);
     backdrop-filter: blur(28px) saturate(180%);
-    -webkit-backdrop-filter: blur(28px) saturate(180%);
   }
+  .glass-ctl {
+    background: oklch(0.14 0.02 280 / 45%);
+    backdrop-filter: blur(18px) saturate(170%);
+    border: 1px solid oklch(1 0 0 / 12%);
+    box-shadow: 0 8px 24px -12px oklch(0 0 0 / 70%);
+  }
+  .glass-ctl-active {
+    background: oklch(0.2 0.06 320 / 55%);
+    border-color: oklch(0.72 0.22 320 / 45%);
+    box-shadow: 0 0 20px -4px var(--neon-glow);
+  }
+
   .gradient-primary { background: var(--gradient-primary); }
   .gradient-overlay { background: var(--gradient-overlay); }
   .gradient-overlay-top { background: var(--gradient-overlay-top); }
