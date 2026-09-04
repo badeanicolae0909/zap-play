@@ -16,11 +16,6 @@ function Account() {
   useEffect(() => { if (!user) nav({ to: "/" }); }, [user, nav]);
   if (!user) return null;
 
-  async function claimAdmin() {
-    const { data: ok, error } = await supabase.rpc("claim_first_admin");
-    if (error || !ok) toast.error("Admin role already claimed or unavailable.");
-    else toast.success("You are now admin");
-  }
 
   return (
     <main className="min-h-screen bg-background pb-32 pt-[max(env(safe-area-inset-top),16px)]">
