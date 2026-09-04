@@ -14,6 +14,7 @@ import { AuthProvider } from "@/lib/auth";
 import { initTelegram } from "@/lib/telegram";
 import { Toaster } from "@/components/ui/sonner";
 import { SecretAdminEntry } from "@/components/SecretAdminEntry";
+import { TelegramBackButton } from "@/components/TelegramBackButton";
 
 function NotFoundComponent() {
   return (
@@ -88,6 +89,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <Outlet />
+        <TelegramBackButton />
         <SecretAdminEntry />
         <Toaster theme="dark" position="top-center" />
       </AuthProvider>

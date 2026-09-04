@@ -13,6 +13,16 @@ type TGWebApp = {
   };
   setHeaderColor?: (color: string) => void;
   setBackgroundColor?: (color: string) => void;
+  BackButton?: {
+    show: () => void;
+    hide: () => void;
+    onClick: (cb: () => void) => void;
+    offClick: (cb: () => void) => void;
+  };
+  onEvent?: (event: string, cb: () => void) => void;
+  offEvent?: (event: string, cb: () => void) => void;
+  enableClosingConfirmation?: () => void;
+  disableClosingConfirmation?: () => void;
 };
 
 declare global {
