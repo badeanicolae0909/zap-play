@@ -3,6 +3,7 @@ import type { FeedVideo } from "@/components/VideoCard";
 import { resolveVideoSource } from "./video-source";
 import { resolveBunkr } from "./bunkr.functions";
 import { bunkrCache } from "./bunkr-cache";
+import { getSeenMap, resetSeen } from "./seen-store";
 
 // Direct media (mp4/webm/etc.) or Supabase-storage hosted videos load instantly.
 // External links (bunkr/turbo/iframe) need a server resolve round-trip, so we
@@ -12,15 +13,6 @@ function isDirectUpload(url: string): boolean {
   if (!url) return false;
   if (DIRECT_EXT.test(url)) return true;
   return /\/storage\/v1\/object\/public\/videos\//i.test(url);
-}
-
-function shuffle<T>(arr: T[]): T[] {
-  const a = arr.slice();
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
 }
 
 const PAGE = 1000;
