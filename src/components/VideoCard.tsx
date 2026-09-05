@@ -612,7 +612,7 @@ export function VideoCard({
         )}
       </div>
 
-      {/* Progress bar */}
+      {/* Progress / scrubber */}
       {!isEmbed && (
         <div
           ref={progressRef}
@@ -620,17 +620,54 @@ export function VideoCard({
           onPointerMove={onScrubMove}
           onPointerUp={onScrubUp}
           onPointerCancel={onScrubUp}
-          className={`absolute inset-x-0 bottom-[92px] z-40 flex h-6 touch-none items-center px-3 transition-opacity duration-300 ${controlsVisible || paused || scrubbing ? "opacity-100" : "opacity-0"}`}
+          className={`absolute inset-x-0 bottom-[86px] z-40 flex h-10 touch-none flex-col justify-center px-3 transition-opacity duration-300 ${controlsVisible || paused || scrubbing ? "opacity-100" : "opacity-0"}`}
         >
-          <div className={`relative w-full overflow-visible rounded-full bg-foreground/15 transition-all ${scrubbing ? "h-1.5" : "h-0.5"}`}>
-            <div className="h-full rounded-full bg-foreground/90 transition-[width] duration-100" style={{ width: `${progress}%` }} />
+          {/* Time bubble while scrubbing */}
+          <AnimatePresence>
+            {scrubbing && duration > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 6, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 6, scale: 0.9 }}
+                className="pointer-events-none absolute -top-1 left-3 right-3"
+              >
+                <div
+                  className="glass-ctl inline-flex -translate-x-1/2 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold tabular-nums"
+                  style={{ marginLeft: `${Math.min(94, Math.max(6, progress))}%` }}
+                >
+                  {fmtTime((progress / 100) * duration)}
+                  <span className="text-muted-foreground">/ {fmtTime(duration)}</span>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div className={`relative w-full overflow-visible rounded-full bg-foreground/15 transition-all duration-200 ${scrubbing ? "h-2" : "h-[3px]"}`}>
+            {/* buffered */}
             <div
-              className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground shadow-lg transition-all ${scrubbing ? "h-4 w-4 opacity-100" : "h-2.5 w-2.5 opacity-0"}`}
+              className="absolute inset-y-0 left-0 rounded-full bg-foreground/25 transition-[width] duration-300"
+              style={{ width: `${Math.max(buffered, progress)}%` }}
+            />
+            <div
+              className="absolute inset-y-0 left-0 rounded-full bg-foreground shadow-[0_0_12px_rgba(255,255,255,0.45)]"
+              style={{ width: `${progress}%` }}
+            />
+            <div
+              className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground shadow-lg ring-4 ring-white/15 transition-all ${scrubbing ? "h-4 w-4 opacity-100" : "h-3 w-3 opacity-90"}`}
               style={{ left: `${progress}%` }}
             />
           </div>
+
+          {/* Elapsed / remaining */}
+          {duration > 0 && (
+            <div className={`mt-1 flex justify-between px-0.5 text-[10px] font-medium tabular-nums text-white/60 transition-opacity ${scrubbing ? "opacity-0" : "opacity-100"}`}>
+              <span>{fmtTime(currentTime)}</span>
+              <span>-{fmtTime(Math.max(0, duration - currentTime))}</span>
+            </div>
+          )}
         </div>
       )}
+
     </div>
   );
 }
