@@ -23,57 +23,86 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-export async function fetchFeed(limit = 30, creatorId?: string): Promise<FeedVideo[]> {
-  const pool = creatorId ? limit : 500;
-  let q = supabase
-    .from("videos")
-    .select("id, video_url, thumbnail_url, caption, tags, like_count, view_count, creator:creators(id, username, display_name, avatar_url)")
-    .eq("is_active", true)
-    .order("created_at", { ascending: false })
-    .limit(pool);
-  if (creatorId) q = q.eq("creator_id", creatorId);
-  const { data, error } = await q;
-  if (error) throw error;
-  const all = (data ?? []) as unknown as FeedVideo[];
+const PAGE = 1000;
 
-  // Single-creator feeds keep chronological order.
-  if (creatorId) return all.slice(0, limit);
-
-  // Group by creator, shuffle each group, then round-robin so every creator
-  // gets a turn before any creator gets a second video.
-  const byCreator = new Map<string, FeedVideo[]>();
-  for (const v of all) {
-    const key = v.creator?.id ?? "_none";
-    if (!byCreator.has(key)) byCreator.set(key, []);
-    byCreator.get(key)!.push(v);
-  }
-  const buckets = shuffle(Array.from(byCreator.values()).map((g) => shuffle(g)));
-
+async function fetchAllActive(creatorId?: string): Promise<FeedVideo[]> {
   const out: FeedVideo[] = [];
-  let lastCreator: string | null = null;
-  let firstPass = true;
-  while (out.length < limit && buckets.some((b) => b.length)) {
-    const order = buckets
-      .map((b, i) => ({ b, i }))
-      .filter((x) => x.b.length > 0)
-      .sort((a, b) => {
-        if (!firstPass) return 0;
-        const ad = isDirectUpload(a.b[0].video_url) ? 0 : 1;
-        const bd = isDirectUpload(b.b[0].video_url) ? 0 : 1;
-        return ad - bd;
-      });
-    for (const { b } of order) {
-      if (out.length >= limit) break;
-      const cid = b[0].creator?.id ?? "_none";
-      if (cid === lastCreator && order.some((o) => (o.b[0].creator?.id ?? "_none") !== lastCreator)) continue;
-      const next = b.shift()!;
-      out.push(next);
-      lastCreator = cid;
-    }
-    firstPass = false;
+  for (let from = 0; from < 5000; from += PAGE) {
+    let q = supabase
+      .from("videos")
+      .select("id, video_url, thumbnail_url, caption, tags, like_count, view_count, creator:creators(id, username, display_name, avatar_url)")
+      .eq("is_active", true)
+      .order("created_at", { ascending: false })
+      .range(from, from + PAGE - 1);
+    if (creatorId) q = q.eq("creator_id", creatorId);
+    const { data, error } = await q;
+    if (error) throw error;
+    const rows = (data ?? []) as unknown as FeedVideo[];
+    out.push(...rows);
+    if (rows.length < PAGE) break;
   }
   return out;
 }
+
+export async function fetchFeed(limit = 30, creatorId?: string): Promise<FeedVideo[]> {
+  const all = await fetchAllActive(creatorId);
+
+  // Single-creator feeds keep chronological order.
+  if (creatorId) return all.slice(0, limit);
+  if (!all.length) return [];
+
+  // ---- Watch-history aware rotation -------------------------------------
+  // Videos the viewer has never seen come first (in random order); already
+  // seen ones follow, oldest-watched first. Once the whole library has been
+  // watched the memory resets so rotation starts over instead of freezing.
+  let seen = getSeenMap();
+  const unseenCount = all.filter((v) => !(v.id in seen)).length;
+  if (unseenCount < Math.min(10, Math.ceil(all.length * 0.05))) {
+    resetSeen();
+    seen = {};
+  }
+
+  const now = Date.now();
+  const scored = all.map((v) => {
+    const last = seen[v.id];
+    // Lower score = earlier in the feed.
+    const base = last === undefined ? 0 : 1 + Math.max(0, 1 - (now - last) / (1000 * 60 * 60 * 24 * 7));
+    return { v, score: base + Math.random() * 0.9 };
+  });
+  scored.sort((a, b) => a.score - b.score);
+  const ranked = scored.map((s) => s.v);
+
+  // ---- Creator spacing ---------------------------------------------------
+  // Walk the ranked list and avoid two videos from the same creator in a row
+  // (and no more than 2 from a creator within any 5-video window).
+  const out: FeedVideo[] = [];
+  const remaining = ranked.slice();
+  const recent: string[] = [];
+  while (out.length < limit && remaining.length) {
+    let pickIdx = remaining.findIndex((v) => {
+      const cid = v.creator?.id ?? "_none";
+      if (recent[recent.length - 1] === cid) return false;
+      return recent.slice(-5).filter((c) => c === cid).length < 2;
+    });
+    if (pickIdx === -1) pickIdx = 0;
+    const [next] = remaining.splice(pickIdx, 1);
+    out.push(next);
+    recent.push(next.creator?.id ?? "_none");
+  }
+
+  // Keep the very first slots on instantly playable uploads so the app never
+  // opens on a spinner — pull one forward if the opener needs resolving.
+  for (let i = 0; i < Math.min(3, out.length); i++) {
+    if (isDirectUpload(out[i].video_url)) continue;
+    const swap = out.findIndex((v, j) => j > i && isDirectUpload(v.video_url));
+    if (swap > -1) {
+      const [d] = out.splice(swap, 1);
+      out.splice(i, 0, d);
+    }
+  }
+
+  return out;
+
 
 export async function fetchUserInteractions(userId: string) {
   const [{ data: likes }, { data: favs }] = await Promise.all([
