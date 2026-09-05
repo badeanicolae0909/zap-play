@@ -12,7 +12,7 @@ function Index() {
   const { data: videos, isLoading } = useQuery({
     queryKey: ["feed"],
     queryFn: async () => {
-      const feed = await fetchFeed(200);
+      const feed = await fetchFeed(400);
       // Pre-resolve bunkr URLs for visible window so the pool starts instantly
       await preResolveBunkr(feed, 5);
       return feed;
