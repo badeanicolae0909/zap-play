@@ -340,6 +340,7 @@ export function VideoCard({
     const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     v.currentTime = pct * v.duration;
     setProgress(pct * 100);
+    setCurrentTime(v.currentTime);
   }
 
   function onScrubDown(e: React.PointerEvent<HTMLDivElement>) {
@@ -508,7 +509,7 @@ export function VideoCard({
       {!isEmbed && (
         <button
           onClick={(e) => { e.stopPropagation(); onToggleMute(); haptic("light"); }}
-          className={`tap-scale absolute right-3 top-3 z-40 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 backdrop-blur-md ring-1 ring-white/10 transition-all duration-300 hover:bg-black/60 ${controlsVisible || paused ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+          className={`tap-scale absolute right-3 top-3 z-40 flex h-9 w-9 items-center justify-center glass-ctl rounded-full transition-all duration-300 ${controlsVisible || paused ? "opacity-100" : "opacity-0 pointer-events-none"}`}
         >
           {muted ? <VolumeX className="h-4 w-4 text-white/90" /> : <Volume2 className="h-4 w-4 text-white/90" />}
         </button>
@@ -531,19 +532,19 @@ export function VideoCard({
           </Link>
         )}
         <button onClick={toggleLike} className="tap-scale group flex flex-col items-center gap-0.5">
-          <div className={`flex h-10 w-10 items-center justify-center rounded-full bg-black/40 backdrop-blur-md ring-1 ring-white/10 transition-all group-hover:bg-black/60 ${liked ? "ring-primary/50" : ""}`}>
+          <div className={`flex h-10 w-10 items-center justify-center glass-ctl rounded-full transition-all group-active:scale-95 ${liked ? "glass-ctl-active" : ""}`}>
             <Heart className={`h-5 w-5 transition-all ${liked ? "fill-primary text-primary scale-110" : "text-white/80 group-hover:text-white"}`} />
           </div>
           <span className="text-[10px] font-semibold text-white/70 drop-shadow">{fmt(likeCount)}</span>
         </button>
         <button onClick={toggleSave} className="tap-scale group flex flex-col items-center gap-0.5">
-          <div className={`flex h-10 w-10 items-center justify-center rounded-full bg-black/40 backdrop-blur-md ring-1 ring-white/10 transition-all group-hover:bg-black/60 ${saved ? "ring-accent/50" : ""}`}>
+          <div className={`flex h-10 w-10 items-center justify-center glass-ctl rounded-full transition-all group-active:scale-95 ${saved ? "glass-ctl-active" : ""}`}>
             <Bookmark className={`h-5 w-5 transition-all ${saved ? "fill-accent text-accent scale-110" : "text-white/80 group-hover:text-white"}`} />
           </div>
           <span className="text-[10px] font-semibold text-white/70 drop-shadow">Save</span>
         </button>
         <button onClick={share} className="tap-scale group flex flex-col items-center gap-0.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black/40 backdrop-blur-md ring-1 ring-white/10 transition-all group-hover:bg-black/60">
+          <div className="flex h-10 w-10 items-center justify-center glass-ctl rounded-full transition-all group-active:scale-95">
             <Share2 className="h-5 w-5 text-white/80 transition-all group-hover:text-white" />
           </div>
           <span className="text-[10px] font-semibold text-white/70 drop-shadow">Share</span>
@@ -551,7 +552,7 @@ export function VideoCard({
         {isAdmin && (
           <>
             <button onClick={editAsAdmin} className="tap-scale group flex flex-col items-center gap-0.5">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black/40 backdrop-blur-md ring-1 ring-white/10 transition-all group-hover:bg-black/60">
+              <div className="flex h-10 w-10 items-center justify-center glass-ctl rounded-full transition-all group-active:scale-95">
                 <Pencil className="h-5 w-5 text-white/80 transition-all group-hover:text-white" />
               </div>
               <span className="text-[10px] font-semibold text-white/70 drop-shadow">Edit</span>
@@ -670,6 +671,13 @@ export function VideoCard({
 
     </div>
   );
+}
+
+function fmtTime(s: number): string {
+  if (!isFinite(s) || s < 0) s = 0;
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
 function fmt(n: number): string {
