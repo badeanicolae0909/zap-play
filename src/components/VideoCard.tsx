@@ -14,6 +14,7 @@ import { useAuth } from "@/lib/auth";
 import { haptic, hapticSuccess } from "@/lib/telegram";
 import { toast } from "sonner";
 import { resolveVideoSource } from "@/lib/video-source";
+import { markSeen } from "@/lib/seen-store";
 import { resolveBunkr } from "@/lib/bunkr.functions";
 import { bunkrCache } from "@/lib/bunkr-cache";
 import type { VideoPool, SlotState } from "@/lib/video-pool";
@@ -173,6 +174,7 @@ export function VideoCard({
   useEffect(() => {
     if (active && !viewedRef.current) {
       viewedRef.current = true;
+      markSeen(video.id);
       void supabase
         .from("video_views")
         .insert({ video_id: video.id, user_id: user?.id ?? null })
