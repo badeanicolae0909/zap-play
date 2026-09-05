@@ -102,6 +102,8 @@ export async function fetchFeed(limit = 30, creatorId?: string): Promise<FeedVid
   }
 
   return out;
+}
+
 
 
 export async function fetchUserInteractions(userId: string) {
