@@ -12,6 +12,7 @@ const DIRECT_EXT = /\.(mp4|webm|m3u8|mov|m4v|ogv)(\?|#|$)/i;
 function isDirectUpload(url: string): boolean {
   if (!url) return false;
   if (DIRECT_EXT.test(url)) return true;
+  if (/(^|\/\/)([a-z0-9-]+\.)*gofile\.io\//i.test(url) && !/gofile\.io\/(d|f)\//i.test(url)) return true;
   return /\/storage\/v1\/object\/public\/videos\//i.test(url);
 }
 
