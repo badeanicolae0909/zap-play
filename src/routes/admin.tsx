@@ -14,6 +14,7 @@ import { Upload, Trash2, Plus, Film, Users, Shield, Download, Loader2, Pencil, S
 import { CreatorPicker } from "@/components/CreatorPicker";
 import { MentionCaptionInput } from "@/components/MentionCaptionInput";
 import { scrapeBunkr, importBunkr } from "@/lib/bunkr.functions";
+import { scrapeGofile, importGofile } from "@/lib/gofile.functions";
 import { createBunnyUpload } from "@/lib/bunny.functions";
 import * as tus from "tus-js-client";
 import { extractVideoThumbnail } from "@/lib/video-thumbnail";
@@ -287,7 +288,138 @@ function UploadTab() {
       </Button>
 
       <BunkrImport creators={creators ?? []} />
+      <GofileImport creators={creators ?? []} />
     </form>
+  );
+}
+
+function GofileImport({ creators }: { creators: Array<{ id: string; display_name: string; username: string }> }) {
+  const qc = useQueryClient();
+  const [folderUrl, setFolderUrl] = useState("");
+  const [password, setPassword] = useState("");
+  const [creatorId, setCreatorId] = useState("");
+  const [caption, setCaption] = useState("");
+  const [items, setItems] = useState<
+    Array<{ pageUrl: string; title: string; thumbnail: string | null; duration: number | null }>
+  >([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [scanning, setScanning] = useState(false);
+  const [importing, setImporting] = useState(false);
+
+  async function doScan() {
+    if (!folderUrl.trim()) return;
+    setScanning(true); setItems([]); setSelected(new Set());
+    try {
+      const res = await scrapeGofile({
+        data: { folderUrl: folderUrl.trim(), ...(password.trim() ? { password: password.trim() } : {}) },
+      });
+      const vids = res.items.map((i) => ({
+        pageUrl: i.pageUrl,
+        title: i.title,
+        thumbnail: i.thumbnail,
+        duration: i.duration ?? null,
+      }));
+      setItems(vids);
+      setSelected(new Set(vids.map((i) => i.pageUrl)));
+      if (!vids.length) toast.message("No videos found in that folder");
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setScanning(false); }
+  }
+
+  async function doImport() {
+    if (!creatorId) { toast.error("Pick a creator"); return; }
+    const picked = items.filter((i) => selected.has(i.pageUrl));
+    if (!picked.length) { toast.error("Select at least one video"); return; }
+    setImporting(true);
+    try {
+      const res = await importGofile({
+        data: { creatorId, items: picked, ...(caption.trim() ? { caption: caption.trim() } : {}) },
+      });
+      toast.success(
+        `Imported ${res.inserted} video${res.inserted === 1 ? "" : "s"}${res.skipped ? ` · ${res.skipped} already added` : ""}`
+      );
+      setItems([]); setSelected(new Set()); setFolderUrl(""); setPassword(""); setCaption("");
+      qc.invalidateQueries({ queryKey: ["feed"] });
+      qc.invalidateQueries({ queryKey: ["admin-videos"] });
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setImporting(false); }
+  }
+
+  function toggle(url: string) {
+    setSelected((s) => { const n = new Set(s); n.has(url) ? n.delete(url) : n.add(url); return n; });
+  }
+
+  return (
+    <div className="mt-2 space-y-3 rounded-2xl glass p-4">
+      <h3 className="flex items-center gap-1.5 text-sm font-semibold"><Download className="h-4 w-4" /> Import from Gofile</h3>
+      <p className="text-[11px] text-muted-foreground">
+        Paste a Gofile share link (e.g. <code>https://gofile.io/d/abc123</code>). Nested folders are scanned too. Needs a saved Gofile Premium API token.
+      </p>
+      <div className="flex gap-2">
+        <Input
+          value={folderUrl}
+          onChange={(e) => setFolderUrl(e.target.value)}
+          placeholder="https://gofile.io/d/…"
+          className="h-11 flex-1 rounded-xl glass"
+        />
+        <Button type="button" onClick={doScan} disabled={scanning || !folderUrl.trim()} className="h-11 rounded-xl">
+          {scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : "Scan"}
+        </Button>
+      </div>
+      <Input
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Folder password (only if protected)"
+        className="h-10 rounded-xl glass text-sm"
+      />
+
+      {items.length > 0 && (
+        <>
+          <div className="space-y-1.5">
+            <Label>Creator to attribute videos</Label>
+            <CreatorPicker creators={creators} value={creatorId} onChange={setCreatorId} />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Caption for all imported videos (optional)</Label>
+            <MentionCaptionInput value={caption} onChange={setCaption} creators={creators} />
+          </div>
+
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>{selected.size} of {items.length} selected</span>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setSelected(new Set(items.map((i) => i.pageUrl)))} className="underline">All</button>
+              <button type="button" onClick={() => setSelected(new Set())} className="underline">None</button>
+            </div>
+          </div>
+
+          <div className="grid max-h-72 grid-cols-3 gap-2 overflow-y-auto">
+            {items.map((it) => {
+              const on = selected.has(it.pageUrl);
+              return (
+                <button
+                  key={it.pageUrl}
+                  type="button"
+                  onClick={() => toggle(it.pageUrl)}
+                  className={`relative aspect-[9/16] overflow-hidden rounded-lg border-2 transition ${on ? "border-primary" : "border-transparent opacity-60"}`}
+                >
+                  {it.thumbnail ? (
+                    <img src={it.thumbnail} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-card text-[10px] text-muted-foreground">No preview</div>
+                  )}
+                  <div className="absolute inset-x-0 bottom-0 truncate bg-black/60 px-1 py-0.5 text-[9px]">{it.title}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          <Button type="button" onClick={doImport} disabled={importing || !creatorId || !selected.size} className="h-11 w-full rounded-xl gradient-primary text-primary-foreground">
+            {importing ? "Importing…" : `Import ${selected.size} video${selected.size === 1 ? "" : "s"}`}
+          </Button>
+        </>
+      )}
+    </div>
   );
 }
 
