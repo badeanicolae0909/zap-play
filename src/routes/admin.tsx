@@ -382,7 +382,13 @@ function GofileImport({ creators }: { creators: Array<{ id: string; display_name
 
           <div className="space-y-1.5">
             <Label>Caption for all imported videos (optional)</Label>
-            <MentionCaptionInput value={caption} onChange={setCaption} creators={creators} />
+            <Textarea
+              value={caption}
+              onChange={(e) => setCaption(e.target.value)}
+              rows={2}
+              placeholder="Leave empty to use each file name"
+              className="rounded-xl glass"
+            />
           </div>
 
           <div className="flex items-center justify-between text-xs text-muted-foreground">
