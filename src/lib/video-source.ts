@@ -23,6 +23,12 @@ export function resolveVideoSource(rawUrl: string): VideoSource {
   const host = u.hostname.replace(/^www\./, "");
   const path = u.pathname;
 
+  // Gofile direct links only serve media when the account token is attached,
+  // so play them through our own streaming endpoint.
+  if (/(^|\.)gofile\.io$/i.test(host) && !/^\/(d|f)\//.test(path)) {
+    return { kind: "video", src: `/api/public/gofile-stream?u=${encodeURIComponent(url)}` };
+  }
+
   // YouTube
   if (host === "youtube.com" || host === "m.youtube.com") {
     const id = u.searchParams.get("v");

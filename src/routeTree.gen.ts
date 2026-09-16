@@ -17,6 +17,7 @@ import { Route as AccountRouteImport } from './routes/account'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as VIdRouteImport } from './routes/v.$id'
 import { Route as CreatorUsernameRouteImport } from './routes/creator.$username'
+import { Route as ApiPublicGofileStreamRouteImport } from './routes/api/public/gofile-stream'
 import { Route as ApiPublicTelegramWebhookRouteImport } from './routes/api/public/telegram.webhook'
 
 const SysAccessRoute = SysAccessRouteImport.update({
@@ -59,6 +60,11 @@ const CreatorUsernameRoute = CreatorUsernameRouteImport.update({
   path: '/creator/$username',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicGofileStreamRoute = ApiPublicGofileStreamRouteImport.update({
+  id: '/api/public/gofile-stream',
+  path: '/api/public/gofile-stream',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicTelegramWebhookRoute =
   ApiPublicTelegramWebhookRouteImport.update({
     id: '/api/public/telegram/webhook',
@@ -75,6 +81,7 @@ export interface FileRoutesByFullPath {
   '/sys-access': typeof SysAccessRoute
   '/creator/$username': typeof CreatorUsernameRoute
   '/v/$id': typeof VIdRoute
+  '/api/public/gofile-stream': typeof ApiPublicGofileStreamRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
 }
 export interface FileRoutesByTo {
@@ -86,6 +93,7 @@ export interface FileRoutesByTo {
   '/sys-access': typeof SysAccessRoute
   '/creator/$username': typeof CreatorUsernameRoute
   '/v/$id': typeof VIdRoute
+  '/api/public/gofile-stream': typeof ApiPublicGofileStreamRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
 }
 export interface FileRoutesById {
@@ -98,6 +106,7 @@ export interface FileRoutesById {
   '/sys-access': typeof SysAccessRoute
   '/creator/$username': typeof CreatorUsernameRoute
   '/v/$id': typeof VIdRoute
+  '/api/public/gofile-stream': typeof ApiPublicGofileStreamRoute
   '/api/public/telegram/webhook': typeof ApiPublicTelegramWebhookRoute
 }
 export interface FileRouteTypes {
@@ -111,6 +120,7 @@ export interface FileRouteTypes {
     | '/sys-access'
     | '/creator/$username'
     | '/v/$id'
+    | '/api/public/gofile-stream'
     | '/api/public/telegram/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -122,6 +132,7 @@ export interface FileRouteTypes {
     | '/sys-access'
     | '/creator/$username'
     | '/v/$id'
+    | '/api/public/gofile-stream'
     | '/api/public/telegram/webhook'
   id:
     | '__root__'
@@ -133,6 +144,7 @@ export interface FileRouteTypes {
     | '/sys-access'
     | '/creator/$username'
     | '/v/$id'
+    | '/api/public/gofile-stream'
     | '/api/public/telegram/webhook'
   fileRoutesById: FileRoutesById
 }
@@ -145,6 +157,7 @@ export interface RootRouteChildren {
   SysAccessRoute: typeof SysAccessRoute
   CreatorUsernameRoute: typeof CreatorUsernameRoute
   VIdRoute: typeof VIdRoute
+  ApiPublicGofileStreamRoute: typeof ApiPublicGofileStreamRoute
   ApiPublicTelegramWebhookRoute: typeof ApiPublicTelegramWebhookRoute
 }
 
@@ -206,6 +219,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CreatorUsernameRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/gofile-stream': {
+      id: '/api/public/gofile-stream'
+      path: '/api/public/gofile-stream'
+      fullPath: '/api/public/gofile-stream'
+      preLoaderRoute: typeof ApiPublicGofileStreamRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/telegram/webhook': {
       id: '/api/public/telegram/webhook'
       path: '/api/public/telegram/webhook'
@@ -225,6 +245,7 @@ const rootRouteChildren: RootRouteChildren = {
   SysAccessRoute: SysAccessRoute,
   CreatorUsernameRoute: CreatorUsernameRoute,
   VIdRoute: VIdRoute,
+  ApiPublicGofileStreamRoute: ApiPublicGofileStreamRoute,
   ApiPublicTelegramWebhookRoute: ApiPublicTelegramWebhookRoute,
 }
 export const routeTree = rootRouteImport

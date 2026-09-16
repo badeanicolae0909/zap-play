@@ -13,9 +13,7 @@ function assertBunkrUrl(raw: string): URL {
   try { u = new URL(raw); } catch { throw new Error("Invalid URL"); }
   const host = u.hostname.toLowerCase();
   if (host === "gofile.io" || host.endsWith(".gofile.io")) {
-    throw new Error(
-      "Gofile.io can't be scraped: their API now requires a Premium account to read shared content (returns error-notPremium for guest tokens). No workaround is possible without a paid gofile API key."
-    );
+    throw new Error("This is a Gofile link — use the “Import from Gofile” box below instead.");
   }
   if (!BUNKR_HOST.test(u.hostname)) throw new Error("Not a bunkr/turbo URL");
   return u;
