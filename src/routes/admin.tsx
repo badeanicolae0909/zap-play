@@ -293,18 +293,64 @@ function UploadTab() {
   );
 }
 
+type GofileItem = {
+  pageUrl: string;
+  title: string;
+  thumbnail: string | null;
+  duration: number | null;
+  orientation: "portrait" | "landscape" | null; // null = still probing / unknown
+  dims: string | null;
+};
+
+// Load just the video's metadata through our streaming proxy to learn its dimensions.
+function probeOrientation(pageUrl: string): Promise<{ orientation: "portrait" | "landscape"; dims: string } | null> {
+  return new Promise((resolve) => {
+    const v = document.createElement("video");
+    v.preload = "metadata";
+    v.muted = true;
+    const timer = window.setTimeout(() => { v.src = ""; resolve(null); }, 12000);
+    v.onloadedmetadata = () => {
+      window.clearTimeout(timer);
+      const w = v.videoWidth, h = v.videoHeight;
+      v.src = "";
+      if (!w || !h) return resolve(null);
+      resolve({ orientation: h >= w ? "portrait" : "landscape", dims: `${w}×${h}` });
+    };
+    v.onerror = () => { window.clearTimeout(timer); resolve(null); };
+    v.src = `/api/public/gofile-stream?u=${encodeURIComponent(pageUrl)}`;
+  });
+}
+
 function GofileImport({ creators }: { creators: Array<{ id: string; display_name: string; username: string }> }) {
   const qc = useQueryClient();
   const [folderUrl, setFolderUrl] = useState("");
   const [password, setPassword] = useState("");
   const [creatorId, setCreatorId] = useState("");
   const [caption, setCaption] = useState("");
-  const [items, setItems] = useState<
-    Array<{ pageUrl: string; title: string; thumbnail: string | null; duration: number | null }>
-  >([]);
+  const [items, setItems] = useState<GofileItem[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [scanning, setScanning] = useState(false);
+  const [probing, setProbing] = useState(false);
   const [importing, setImporting] = useState(false);
+
+  // Probe dimensions with limited concurrency; auto-select every portrait video.
+  async function probeAll(vids: GofileItem[]) {
+    setProbing(true);
+    const queue = [...vids];
+    async function worker() {
+      while (queue.length) {
+        const it = queue.shift()!;
+        const r = await probeOrientation(it.pageUrl);
+        if (!r) continue;
+        setItems((cur) => cur.map((c) => (c.pageUrl === it.pageUrl ? { ...c, orientation: r.orientation, dims: r.dims } : c)));
+        if (r.orientation === "portrait") {
+          setSelected((s) => { const n = new Set(s); n.add(it.pageUrl); return n; });
+        }
+      }
+    }
+    await Promise.all([worker(), worker(), worker()]);
+    setProbing(false);
+  }
 
   async function doScan() {
     if (!folderUrl.trim()) return;
@@ -313,15 +359,17 @@ function GofileImport({ creators }: { creators: Array<{ id: string; display_name
       const res = await scrapeGofile({
         data: { folderUrl: folderUrl.trim(), ...(password.trim() ? { password: password.trim() } : {}) },
       });
-      const vids = res.items.map((i) => ({
+      const vids: GofileItem[] = res.items.map((i) => ({
         pageUrl: i.pageUrl,
         title: i.title,
         thumbnail: i.thumbnail,
         duration: i.duration ?? null,
+        orientation: null,
+        dims: null,
       }));
       setItems(vids);
-      setSelected(new Set(vids.map((i) => i.pageUrl)));
       if (!vids.length) toast.message("No videos found in that folder");
+      else void probeAll(vids);
     } catch (e) { toast.error((e as Error).message); }
     finally { setScanning(false); }
   }
