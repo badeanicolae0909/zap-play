@@ -440,8 +440,18 @@ function GofileImport({ creators }: { creators: Array<{ id: string; display_name
           </div>
 
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>{selected.size} of {items.length} selected</span>
+            <span>
+              {selected.size} of {items.length} selected
+              {probing && <span className="ml-1.5 inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" />checking…</span>}
+            </span>
             <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setSelected(new Set(items.filter((i) => i.orientation === "portrait").map((i) => i.pageUrl)))}
+                className="underline"
+              >
+                Portrait
+              </button>
               <button type="button" onClick={() => setSelected(new Set(items.map((i) => i.pageUrl)))} className="underline">All</button>
               <button type="button" onClick={() => setSelected(new Set())} className="underline">None</button>
             </div>
@@ -461,6 +471,19 @@ function GofileImport({ creators }: { creators: Array<{ id: string; display_name
                     <img src={it.thumbnail} alt="" className="h-full w-full object-cover" />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center bg-card text-[10px] text-muted-foreground">No preview</div>
+                  )}
+                  {it.orientation ? (
+                    <span
+                      className={`absolute left-1 top-1 rounded-full px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide ${
+                        it.orientation === "portrait" ? "bg-primary text-primary-foreground" : "bg-black/70 text-white"
+                      }`}
+                    >
+                      {it.orientation === "portrait" ? "▯ Portrait" : "▭ Landscape"}{it.dims ? ` · ${it.dims}` : ""}
+                    </span>
+                  ) : (
+                    <span className="absolute left-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 text-[8px] text-white">
+                      <Loader2 className="inline h-2.5 w-2.5 animate-spin" /> …
+                    </span>
                   )}
                   <div className="absolute inset-x-0 bottom-0 truncate bg-black/60 px-1 py-0.5 text-[9px]">{it.title}</div>
                 </button>
