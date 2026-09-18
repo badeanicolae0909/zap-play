@@ -500,23 +500,64 @@ function GofileImport({ creators }: { creators: Array<{ id: string; display_name
   );
 }
 
+type BunkrItemUi = {
+  pageUrl: string;
+  title: string;
+  thumbnail: string | null;
+  orientation: "portrait" | "landscape" | null; // null = still probing / unknown
+};
+
+// Bunkr thumbnails are frames from the video, so their aspect ratio tells us the orientation
+// without resolving (and rate-limiting) the signed video URLs.
+function probeThumbOrientation(src: string): Promise<"portrait" | "landscape" | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const timer = window.setTimeout(() => { img.src = ""; resolve(null); }, 10000);
+    img.onload = () => {
+      window.clearTimeout(timer);
+      resolve(img.naturalHeight >= img.naturalWidth ? "portrait" : "landscape");
+    };
+    img.onerror = () => { window.clearTimeout(timer); resolve(null); };
+    img.src = src;
+  });
+}
+
 function BunkrImport({ creators }: { creators: Array<{ id: string; display_name: string; username: string }> }) {
   const qc = useQueryClient();
   const [albumUrl, setAlbumUrl] = useState("");
   const [creatorId, setCreatorId] = useState("");
-  const [items, setItems] = useState<Array<{ pageUrl: string; title: string; thumbnail: string | null }>>([]);
+  const [items, setItems] = useState<BunkrItemUi[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [scraping, setScraping] = useState(false);
   const [importing, setImporting] = useState(false);
+
+  // Probe each thumbnail's aspect ratio; auto-select every portrait video.
+  async function probeAllThumbs(vids: BunkrItemUi[]) {
+    const queue = [...vids];
+    async function worker() {
+      while (queue.length) {
+        const it = queue.shift()!;
+        if (!it.thumbnail) continue;
+        const o = await probeThumbOrientation(it.thumbnail);
+        if (!o) continue;
+        setItems((cur) => cur.map((c) => (c.pageUrl === it.pageUrl ? { ...c, orientation: o } : c)));
+        if (o === "portrait") {
+          setSelected((s) => { const n = new Set(s); n.add(it.pageUrl); return n; });
+        }
+      }
+    }
+    await Promise.all([worker(), worker(), worker(), worker(), worker()]);
+  }
 
   async function doScrape() {
     if (!albumUrl.trim()) return;
     setScraping(true); setItems([]); setSelected(new Set());
     try {
       const res = await scrapeBunkr({ data: { albumUrl: albumUrl.trim() } });
-      setItems(res.items);
-      setSelected(new Set(res.items.map((i) => i.pageUrl)));
-      if (!res.items.length) toast.message("No videos found in album");
+      const vids: BunkrItemUi[] = res.items.map((i) => ({ ...i, orientation: null }));
+      setItems(vids);
+      if (!vids.length) toast.message("No videos found in album");
+      else void probeAllThumbs(vids);
     } catch (e) { toast.error((e as Error).message); }
     finally { setScraping(false); }
   }
@@ -568,6 +609,13 @@ function BunkrImport({ creators }: { creators: Array<{ id: string; display_name:
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>{selected.size} of {items.length} selected</span>
             <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setSelected(new Set(items.filter((i) => i.orientation === "portrait").map((i) => i.pageUrl)))}
+                className="underline"
+              >
+                Portrait
+              </button>
               <button type="button" onClick={() => setSelected(new Set(items.map((i) => i.pageUrl)))} className="underline">All</button>
               <button type="button" onClick={() => setSelected(new Set())} className="underline">None</button>
             </div>
@@ -587,6 +635,15 @@ function BunkrImport({ creators }: { creators: Array<{ id: string; display_name:
                     <img src={it.thumbnail} alt="" className="h-full w-full object-cover" />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center bg-card text-[10px] text-muted-foreground">No preview</div>
+                  )}
+                  {it.orientation && (
+                    <span
+                      className={`absolute left-1 top-1 rounded-full px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide ${
+                        it.orientation === "portrait" ? "bg-primary text-primary-foreground" : "bg-black/70 text-white"
+                      }`}
+                    >
+                      {it.orientation === "portrait" ? "▯ Portrait" : "▭ Landscape"}
+                    </span>
                   )}
                   <div className="absolute inset-x-0 bottom-0 truncate bg-black/60 px-1 py-0.5 text-[9px]">{it.title}</div>
                 </button>
