@@ -182,7 +182,7 @@ export function VideoFeed({ videos, likedSet, savedSet, loading, emptyText, init
                 video={v}
                 active={isActive}
                 muted={muted}
-                onToggleMute={() => setMuted((m) => !m)}
+                onToggleMute={toggleMute}
                 pool={pool}
                 poolSlot={slot}
                 state={isSkipped ? "error" : slotState}
