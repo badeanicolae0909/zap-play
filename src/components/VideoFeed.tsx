@@ -61,6 +61,41 @@ export function VideoFeed({ videos, likedSet, savedSet, loading, emptyText, init
     pool.setMuted(muted);
   }, [muted, pool]);
 
+  // Toggle mute — must touch the <video> element inside the user gesture,
+  // otherwise mobile browsers refuse to enable audio.
+  const toggleMute = useCallback(() => {
+    setMuted((m) => {
+      const next = !m;
+      pool.setMuted(next);
+      if (!next) {
+        const slotIdx = active % 3;
+        const el = pool.slots[slotIdx].el;
+        el.muted = false;
+        el.defaultMuted = false;
+        el.removeAttribute("muted");
+        el.volume = 1;
+        pool.play(slotIdx);
+      }
+      return next;
+    });
+  }, [pool, active]);
+
+  // Hardware volume keys → unmute (Telegram WebView / Android deliver these)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (["AudioVolumeUp", "AudioVolumeDown", "VolumeUp", "VolumeDown"].includes(e.key)) {
+        setMuted(false);
+        pool.setMuted(false);
+        const slotIdx = active % 3;
+        const el = pool.slots[slotIdx].el;
+        el.muted = false;
+        el.volume = 1;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pool, active]);
+
   // Assign pool slot by video index (round-robin modulo 3)
   const poolSlotFor = useCallback(
     (videoIndex: number): number => videoIndex % 3,
